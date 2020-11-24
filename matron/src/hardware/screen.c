@@ -505,5 +505,36 @@ void screen_translate(double x, double y) {
     cairo_translate(cr, x, y);
 }
 
+void screen_set_operator(int i) {
+    CHECK_CR
+    cairo_operator_t a[24];
+    a[0] = CAIRO_OPERATOR_CLEAR;
+    a[1] = CAIRO_OPERATOR_SOURCE;
+    a[2] = CAIRO_OPERATOR_OVER;
+    a[3] = CAIRO_OPERATOR_IN;
+    a[4] = CAIRO_OPERATOR_OUT;
+    a[5] = CAIRO_OPERATOR_ATOP;
+    a[6] = CAIRO_OPERATOR_DEST;
+    a[7] = CAIRO_OPERATOR_DEST_OVER;
+    a[8] = CAIRO_OPERATOR_DEST_IN;
+    a[9] = CAIRO_OPERATOR_DEST_ATOP;
+    a[10] = CAIRO_OPERATOR_XOR;
+    a[11] = CAIRO_OPERATOR_ADD;
+    a[12] = CAIRO_OPERATOR_SATURATE;
+    a[13] = CAIRO_OPERATOR_MULTIPLY;
+    a[14] = CAIRO_OPERATOR_SCREEN;
+    a[15] = CAIRO_OPERATOR_OVERLAY;
+    a[16] = CAIRO_OPERATOR_DARKEN;
+    a[17] = CAIRO_OPERATOR_LIGHTEN;
+    a[18] = CAIRO_OPERATOR_COLOR_DODGE;
+    a[19] = CAIRO_OPERATOR_COLOR_BURN;
+    a[20] = CAIRO_OPERATOR_HARD_LIGHT;
+    a[21] = CAIRO_OPERATOR_SOFT_LIGHT;
+    a[22] = CAIRO_OPERATOR_DIFFERENCE;
+    a[23] = CAIRO_OPERATOR_EXCLUSION;
+    
+    cairo_set_operator(cr, a[i]);
+}
+
 #undef CHECK_CR
 #undef CHECK_CRR
