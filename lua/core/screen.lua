@@ -303,52 +303,54 @@ Screen.restore = function() _norns.screen_restore() end
 --- change screen blending mode.
 -- @tparam number index blending mode (see list)
 --
+-- more info at https://www.cairographics.org/operators/
+--
 -- 0 CLEAR
--- 
+--
 -- 1 SOURCE
--- 
+--
 -- 2 OVER
--- 
+--
 -- 3 IN
--- 
+--
 -- 4 OUT
--- 
+--
 -- 5 ATOP
--- 
+--
 -- 6 DEST
--- 
+--
 -- 7 DEST_OVER
--- 
+--
 -- 8 DEST_IN
--- 
+--
 -- 9 DEST_ATOP
--- 
+--
 -- 10 XOR
--- 
+--
 -- 11 ADD
--- 
+--
 -- 12 SATURATE
--- 
+--
 -- 13 MULTIPLY
--- 
+--
 -- 14 SCREEN
--- 
+--
 -- 15 OVERLAY
--- 
+--
 -- 16 DARKEN
--- 
+--
 -- 17 LIGHTEN
--- 
+--
 -- 18 COLOR_DODGE
--- 
+--
 -- 19 COLOR_BURN
--- 
+--
 -- 20 HARD_LIGHT
--- 
+--
 -- 21 SOFT_LIGHT
--- 
+--
 -- 22 DIFFERENCE
--- 
+--
 -- 23 EXCLUSION
 Screen.blend_mode = function(index) _norns.screen_set_operator(index) end
 
