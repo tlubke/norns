@@ -381,7 +381,7 @@ Screen.blend_mode = function(index)
   if type(index) == "string" then
     local i = Screen.BLEND_MODES[string.upper(index)]
     if i ~= nil then
-      _norns.screen_set_operator(Screen.BLEND_MODES[index])
+      _norns.screen_set_operator(i)
     else
       print(index..' is not a valid blending mode, use tab.print(screen.BLEND_MODES) to see available modes and their indexes.')
     end

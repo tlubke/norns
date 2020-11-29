@@ -541,7 +541,7 @@ void screen_translate(double x, double y) {
 
 void screen_set_operator(int i) {
     CHECK_CR
-    if (i <= 0 && i <= 29) {
+    if (0 <= i && i <= 28) {
         cairo_set_operator(cr, ops[i]);
     }
 }

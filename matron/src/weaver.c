@@ -982,7 +982,7 @@ int _screen_set_operator(lua_State *l) {
     lua_check_num_args(1);
     int i = luaL_checknumber(l, 1);
     if (i < 0) { i = 0; }
-    if (i > 29){ i = 29;}
+    if (i > 28){ i = 28;}
     screen_set_operator(i);
     lua_settop(l, 0);
     return 0;
