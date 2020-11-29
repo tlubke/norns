@@ -310,8 +310,8 @@ Screen.BLEND_MODES = {
   ['MULTIPLY'] = 3,
   ['SCREEN'] = 4,
   ['OVERLAY'] = 5,
-  ['DARKER'] = 6,
-  ['LIGHT'] = 7,
+  ['DARKEN'] = 6,
+  ['LIGHTEN'] = 7,
   ['COLOR_DODGE'] = 8,
   ['COLOR_BURN'] = 9,
   ['HARD_LIGHT'] = 10,
@@ -320,20 +320,19 @@ Screen.BLEND_MODES = {
   ['EXCLUSION'] = 13,
   ['CLEAR'] = 14,
   ['SOURCE'] = 15,
-  ['OVER'] = 16,
-  ['IN'] = 17,
-  ['OUT'] = 18,
-  ['ATOP'] = 19,
-  ['DEST'] = 20,
-  ['DEST_OVER'] = 21,
-  ['DEST_IN'] = 22,
-  ['DEST_OUT'] = 23,
-  ['DEST_ATOP'] = 24,
-  ['SATURATE'] = 25,
-  ['HSL_HUE'] = 26,
-  ['HSL_SATURATION'] = 27,
-  ['HSL_COLOR'] = 28,
-  ['HSL_LUMINOSITY'] = 29,
+  ['IN'] = 16,
+  ['OUT'] = 17,
+  ['ATOP'] = 18,
+  ['DEST'] = 19,
+  ['DEST_OVER'] = 20,
+  ['DEST_IN'] = 21,
+  ['DEST_OUT'] = 22,
+  ['DEST_ATOP'] = 23,
+  ['SATURATE'] = 24,
+  ['HSL_HUE'] = 25,
+  ['HSL_SATURATION'] = 26,
+  ['HSL_COLOR'] = 27,
+  ['HSL_LUMINOSITY'] = 28,
 }
 
 --- change screen blending mode.
@@ -341,7 +340,7 @@ Screen.BLEND_MODES = {
 --
 -- more info at https://www.cairographics.org/operators/
 --
--- there are other operators available, see the above link or use tab.print(Screen.BLEND_MODES) in the REPL for the full list.
+-- there are other operators available, see the above link or use tab.print(screen.BLEND_MODES) in the REPL for the full list.
 --
 -- 0 Over (default)
 --
@@ -384,7 +383,7 @@ Screen.blend_mode = function(index)
     if i ~= nil then
       _norns.screen_set_operator(Screen.BLEND_MODES[index])
     else
-      print(i..' is not a valid blending mode, use tab.print(Screen.BLEND_MODES) to see available modes and their indexes.')
+      print(index..' is not a valid blending mode, use tab.print(screen.BLEND_MODES) to see available modes and their indexes.')
     end
   elseif type(index) == "number" then
     _norns.screen_set_operator(index)
