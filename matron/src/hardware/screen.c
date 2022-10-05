@@ -84,7 +84,7 @@ static FT_Face face[NUM_FONTS];
 static double text_xy[2];
 
 void screen_init(void) {
-    surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 128, 64);
+    surface = cairo_image_surface_create(CAIRO_FORMAT_A8, 128, 64);
     cr = cr_primary = cairo_create(surface);
 
     status = FT_Init_FreeType(&value);
@@ -283,7 +283,7 @@ void screen_level(int z) {
         z=0;
     else if(z>15)
         z=15;
-    cairo_set_source_rgb(cr, c[z], c[z], c[z]);
+    cairo_set_source_rgba(cr, 0.0, 0.0, 0.0, c[z]);
 }
 
 void screen_line_width(double w) {
@@ -430,15 +430,14 @@ char *screen_peek(int x, int y, int *w, int *h) {
         return NULL;
     }
     cairo_surface_flush(surface);
-    uint32_t *data = (uint32_t *)cairo_image_surface_get_data(surface);
+    uint8_t *data = (uint8_t *)cairo_image_surface_get_data(surface);
     if (!data) {
         return NULL;
     }
     char *p = buf;
     for (int j = y; j < y + *h; j++) {
         for (int i = x; i < x + *w; i++) {
-            *p = data[j * 128 + i] & 0xF;
-            p++;
+            *p++ = data[j * 128 + i] & 0xF;
         }
     }
     return buf;
@@ -449,18 +448,16 @@ void screen_poke(int x, int y, int w, int h, unsigned char *buf) {
     w = (w <= (128 - x)) ? w : (128 - x);
     h = (h <= (64 - y))  ? h : (64 - y);
 
-    uint32_t *data = (uint32_t *)cairo_image_surface_get_data(surface);
+    uint8_t *data = (uint8_t *)cairo_image_surface_get_data(surface);
     if (!data) {
         return;
     }
     uint8_t *p = buf;
-    uint32_t pixel;
+    uint8_t pixel;
     for (int j = y; j < y + h; j++) {
         for (int i = x; i < x + w; i++) {
-            pixel = *p;
-            pixel = pixel | (pixel << 4);
-            data[j * 128 + i] = pixel | (pixel << 8) | (pixel << 16) | (pixel << 24);
-            p++;
+            pixel = *p++;
+            data[j * 128 + i] = pixel | (pixel << 4);
         }
     }
     cairo_surface_mark_dirty(surface);
@@ -486,7 +483,7 @@ void screen_set_operator(int i) {
 screen_surface_t *screen_surface_new(double width, double height) {
     int w = (int)floor(width);
     int h = (int)floor(height);
-    cairo_format_t format = CAIRO_FORMAT_ARGB32;
+    cairo_format_t format = CAIRO_FORMAT_A8;
     cairo_surface_t *image = cairo_image_surface_create(format, w, h);
     cairo_status_t status = cairo_surface_status(image);
     if (status == CAIRO_STATUS_SUCCESS) {
