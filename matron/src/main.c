@@ -34,6 +34,8 @@
 #include "oracle.h"
 #include "weaver.h"
 
+#include "hardware/screen/ssd1322.h"
+
 void print_version(void);
 
 void cleanup(void) {
@@ -52,6 +54,8 @@ void cleanup(void) {
 }
 
 int main(int argc, char **argv) {
+    ssd1322_init();
+    return 0;
     args_parse(argc, argv);
 
     print_version();
