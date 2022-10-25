@@ -53,6 +53,12 @@ def configure(conf):
         header_name='monome.h',
         uselib_store='LIBMONOME')
 
+    conf.check_cc(msg='Checking for BCM2835',
+        mandatory=True,
+        lib='bcm2835',
+        header_name='bcm2835.h',
+        uselib_store='LIBBCM2835')
+
     if conf.options.desktop:
         conf.check_cfg(package='sdl2', args=['--cflags', '--libs'])
         conf.define('NORNS_DESKTOP', True)
