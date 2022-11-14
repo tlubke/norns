@@ -1,42 +1,13 @@
 #include "ssd1322.h"
 
-int write_gpio(uint8_t chip, uint8_t line, uint8_t value){
-    struct gpiohandle_data data = {
-            .values = { value }
-    };
-    struct gpiohandle_request request = {
-            .consumer_label = "N/A", // not used, could use an enum and do something to label GPIO.
-            .fd = 0, // Set by GPIO_GET_LINEHANDLE_IOCTL.
-            .flags = GPIOHANDLE_REQUEST_OUTPUT,
-            .lines = 1,
-            .lineoffsets = { line },
-            .default_values = { 0 }, // If request doesn't receive data, pull LOW.
-    };
+static int spidev_fd = 0;
+static struct gpiod_chip * gpio_0;
+static struct gpiod_line * gpio_dc;
+static struct gpiod_line * gpio_reset;
 
-    char device_name[32];
-    sprintf(device_name, "/dev/gpiochip%d", chip);
+int write_gpio(struct gpiod_line * line, uint8_t value){
 
-    int fd = open(device_name, O_WRONLY | O_SYNC);
-
-    if( fd < 0 ){
-        fprintf(stderr, "(gpio) couldn't open %s\n", device_name);
-        return -1;
-    }
-
-    if( ioctl( fd, GPIO_GET_LINEHANDLE_IOCTL, &request ) < 0){
-        fprintf(stderr, "(gpio) couldn't complete gpio_get_linehandle for gpio%x %x=%x\n", chip, line, value);
-        return -1;
-    }
-
-    close(fd);
-
-    if( ioctl( request.fd, GPIOHANDLE_SET_LINE_VALUES_IOCTL, &data ) < 0){
-        fprintf(stderr, "(gpio) couldn't complete gpio_set_line_values for gpio%x %x=%x\n", chip, line, value);
-        return -1;
-    }
-
-    close(request.fd);
-
+    gpiod_line_set_value(line, value);
     return 0;
 }
 
@@ -46,61 +17,65 @@ int open_spi() {
     uint8_t little_endian = 0;
     uint32_t speed_hz = 1200000000 / 64; // 18.75Mhz, 1200Mhz is the CPU speed.
 
-    int spidev_fd = open(SPI0_0_DEVICE_PATH, O_RDWR | O_SYNC);
+    int fd = open(SPIDEV_0_0_PATH, O_RDWR | O_SYNC);
 
-    if( spidev_fd < 0 ){
-        fprintf(stderr, "(screen) couldn't open %s\n", SPI0_0_DEVICE_PATH);
+    if( fd < 0 ){
+        fprintf(stderr, "(screen) couldn't open %s\n", SPIDEV_0_0_PATH);
         return -1;
     }
 
     int outcome = 0
-    || ( ioctl(spidev_fd, SPI_IOC_WR_MODE, &mode)                   < 0 )
-    || ( ioctl(spidev_fd, SPI_IOC_WR_BITS_PER_WORD, &bits_per_word) < 0 )
-    || ( ioctl(spidev_fd, SPI_IOC_WR_MAX_SPEED_HZ, &speed_hz)       < 0 )
-    || ( ioctl(spidev_fd, SPI_IOC_WR_LSB_FIRST, &little_endian)     < 0 );
+    || ( ioctl(fd, SPI_IOC_WR_MODE, &mode)                   < 0 )
+    || ( ioctl(fd, SPI_IOC_WR_BITS_PER_WORD, &bits_per_word) < 0 )
+    || ( ioctl(fd, SPI_IOC_WR_MAX_SPEED_HZ, &speed_hz)       < 0 )
+    || ( ioctl(fd, SPI_IOC_WR_LSB_FIRST, &little_endian)     < 0 );
     if( outcome != 0 ){
        fprintf(stderr, "could not set SPI WR settings via IOC\n");
-       close(spidev_fd);
+       close(fd);
        return -1;
     }
 
-    return spidev_fd;
+    return fd;
 }
 
-int ssd1322_write_command(int fd, uint8_t command, uint64_t data_len, ...) {
+int ssd1322_write_command(uint8_t command, uint8_t data_len, ...) {
+    va_list args;
+    uint8_t cmd_buf[1];
+    uint8_t data_buf[256];
+    struct spi_ioc_transfer cmd_transfer = {0};
+    struct spi_ioc_transfer data_transfer = {0};
 
-    uint8_t cmd_buf[] = { command };
+    if( spidev_fd <= 0 ){
+        fprintf(stderr, "ssd1322_write_command: spidev not yet opened\n");
+        return -1;
+    }
 
-    write_gpio(SSD1322_DC_GPIO_CHIP, SSD1322_DC_GPIO_LINE, 0);
+    gpiod_line_set_value(gpio_dc, 0);
 
-    struct spi_ioc_transfer command_transfer = {0};
-    command_transfer.tx_buf = (unsigned long) cmd_buf;
-    command_transfer.len = sizeof(cmd_buf);
+    cmd_buf[0] = command;
+    cmd_transfer.tx_buf = (unsigned long) cmd_buf;
+    cmd_transfer.len = (uint32_t) sizeof(cmd_buf);
 
-    if( ioctl(fd, SPI_IOC_MESSAGE(1), &command_transfer) < 0 ){
+    if( ioctl(spidev_fd, SPI_IOC_MESSAGE(1), &cmd_transfer) < 0 ){
         fprintf(stderr, "could not send SPI command-message via ioctl().\n");
         return -1;
     }
 
     if( data_len > 0 ){
-        write_gpio(SSD1322_DC_GPIO_CHIP, SSD1322_DC_GPIO_LINE, 1);
+        gpiod_line_set_value(gpio_dc, 1);
 
-        va_list args;
         va_start(args, data_len);
 
-        uint8_t data[data_len];
-
-        for( uint64_t i = 0; i < data_len; i++ ){
-            data[i] = va_arg(args, int);
+        for( uint8_t i = 0; i < data_len; i++ ){
+            data_buf[i] = va_arg(args, int);
         }
 
         va_end(args);
 
-        struct spi_ioc_transfer data_transfer = {0};
-        data_transfer.tx_buf = (unsigned long) data;
-        data_transfer.len = data_len;
+        data_transfer.tx_buf = (unsigned long) data_buf;
+        data_transfer.len = (uint32_t) data_len;
 
-        if( ioctl(fd, SPI_IOC_MESSAGE(1), &data_transfer) < 0 ){
+        if( ioctl(spidev_fd, SPI_IOC_MESSAGE(1), &data_transfer) < 0 ){
             fprintf(stderr, "could not send SPI data-message via ioctl().\n");
             return -1;
         }
@@ -110,35 +85,92 @@ int ssd1322_write_command(int fd, uint8_t command, uint64_t data_len, ...) {
 }
 
 #define NUMARGS(...)  (sizeof((int[]){__VA_ARGS__}) / sizeof(int))
-#define write_command_with_data(x, y, ...) \
-    (ssd1322_write_command(x, y, NUMARGS(__VA_ARGS__), __VA_ARGS__))
-#define write_command(x, y) \
-    (ssd1322_write_command(x, y, 0, 0))
+#define write_command_with_data(x, ...) \
+    (ssd1322_write_command(x, NUMARGS(__VA_ARGS__), __VA_ARGS__))
+#define write_command(x) \
+    (ssd1322_write_command(x, 0, 0))
 
 void ssd1322_init() {
 
+    spidev_fd = open_spi(SPIDEV_0_0_PATH);
+    if( spidev_fd < 0 ){
+        fprintf(stderr, "ssd1322_init: couldn't open %s.\n", SPIDEV_0_0_PATH);
+        return;
+    }
+
+    gpio_0 = gpiod_chip_open_by_name(SSD1322_DC_AND_RESET_GPIO_CHIP);
+    gpio_dc = gpiod_chip_get_line(gpio_0, SSD1322_DC_GPIO_LINE);
+    gpio_reset = gpiod_chip_get_line(gpio_0, SSD1322_RESET_GPIO_LINE);
+
+    gpiod_line_request_output(gpio_dc, "D/C", 0);
+    gpiod_line_request_output(gpio_reset, "RST", 0);
+
     // SSD1322 Reference Document (v1.2) P 16/60
     // "Keep this pin pull HIGH during normal operation"
-    write_gpio(SSD1322_RESET_GPIO_CHIP, SSD1322_RESET_GPIO_LINE, 1);
+    gpiod_line_set_value(gpio_reset, 1);
 
-    int fd = open_spi(SPI0_0_DEVICE_PATH);
+    write_command(SSD1322_SET_DISPLAY_OFF);
+    write_command(SSD1322_SET_DEFAULT_LINEAR_GRAY_SCALE);
+    write_command_with_data(SSD1322_SET_OSCILLATOR_FREQUENCY, 0xF2);
+    write_command_with_data(SSD1322_SET_MULTIPLEX_RATIO, 0x3F);
+    write_command_with_data(SSD1322_SET_DISPLAY_OFFSET, 0x00);
+    write_command_with_data(SSD1322_SET_DISPLAY_START_LINE, 0x00);
+    write_command_with_data(SSD1322_SET_VDD_REGULATOR, 0x01);
+    write_command_with_data(SSD1322_SET_DUAL_COMM_LINE_MODE, 0x16, 0x11);
+    write_command_with_data(SSD1322_SET_DISPLAY_ENHANCEMENT_A, 0xA0, 0xFD);
+    write_command_with_data(SSD1322_SET_CONTRAST_CURRENT, 0x7F);
+    write_command_with_data(SSD1322_MASTER_CURRENT_CONTROL, 0x0F);
+    write_command_with_data(SSD1322_SET_PHASE_LENGTH, 0xF2);
+    write_command_with_data(SSD1322_SET_PRECHARGE_VOLTAGE, 0x1F);
+    write_command_with_data(SSD1322_SET_VCOMH_VOLTAGE, 0x04);
+    write_command_with_data(SSD1322_SET_COLUMN_ADDRESS, 28, 91);
+    write_command_with_data(SSD1322_SET_ROW_ADDRESS, 0, 63);
+    write_command(SSD1322_WRITE_RAM_COMMAND); // set GDDRAM for write, doesn't
+                                              // effect other commands.
+    write_command(SSD1322_SET_DISPLAY_MODE_NORMAL);
+    write_command(SSD1322_SET_DISPLAY_ON);
+}
 
-    write_command(fd, SSD1322_SET_DISPLAY_OFF);
-    write_command(fd, SSD1322_SET_DEFAULT_LINEAR_GRAY_SCALE);
-    write_command_with_data(fd, SSD1322_SET_OSCILLATOR_FREQUENCY, 0xF2);
-    write_command_with_data(fd, SSD1322_SET_MULTIPLEX_RATIO, 0x3F);
-    write_command_with_data(fd, SSD1322_SET_DISPLAY_OFFSET, 0x00);
-    write_command_with_data(fd, SSD1322_SET_DISPLAY_START_LINE, 0x00);
-    write_command_with_data(fd, SSD1322_SET_VDD_REGULATOR, 0x01);
-    write_command_with_data(fd, SSD1322_SET_DUAL_COMM_LINE_MODE, 0x16, 0x11);
-    write_command_with_data(fd, SSD1322_SET_DISPLAY_ENHANCEMENT_A, 0xA0, 0xFD);
-    write_command_with_data(fd, SSD1322_SET_CONTRAST_CURRENT, 0x7F);
-    write_command_with_data(fd, SSD1322_MASTER_CURRENT_CONTROL, 0x0F);
-    write_command_with_data(fd, SSD1322_SET_PHASE_LENGTH, 0xF2);
-    write_command_with_data(fd, SSD1322_SET_PRECHARGE_VOLTAGE, 0x1F);
-    write_command_with_data(fd, SSD1322_SET_VCOMH_VOLTAGE, 0x04);
-    write_command(fd, SSD1322_SET_DISPLAY_MODE_ALL_ON);
-    write_command(fd, SSD1322_SET_DISPLAY_ON);
+void ssd1322_deinit(){
+    if( spidev_fd > 0 ){
+        gpiod_line_release(gpio_reset);
+        gpiod_line_release(gpio_dc);
+        gpiod_chip_close(gpio_0);
+        close(spidev_fd);
+    }
+}
 
-    close(fd);
+void ssd1322_update(uint8_t * buf, uint16_t buf_len){
+    struct spi_ioc_transfer transfer = {0};
+
+    if( spidev_fd <= 0 ){
+        fprintf(stderr, "%s: spidev not yet opened.\n", __func__);
+        return;
+    }
+
+    if( buf_len > 8192 ){
+        fprintf(stderr, "%s: buf_len greater than screen GDDRAM", __func__);
+    }
+
+
+    gpiod_line_set_value(gpio_dc, 1);
+
+    // The spidev module has a buffer size limit of 4096.
+    // Setting it in /boot/cmdline.txt like the internet suggests didn't
+    // work for me. Instead, just send two separate SPI transactions.
+
+    transfer.tx_buf = (unsigned long) buf;
+    transfer.len = (uint32_t) buf_len / 2;
+
+    if( ioctl(spidev_fd, SPI_IOC_MESSAGE(1), &transfer) < 0 ){
+        fprintf(stderr, "%s: SPI data transfer 1 failed.\n", __func__);
+        return;
+    }
+   
+    transfer.tx_buf = (unsigned long) (buf + (buf_len / 2));
+    
+    if( ioctl(spidev_fd, SPI_IOC_MESSAGE(1), &transfer) < 0 ){
+        fprintf(stderr, "%s: SPI data transfer 2 failed.\n", __func__);
+        return;
+    }
 }

@@ -18,6 +18,7 @@
 #include "args.h"
 #include "hardware/io.h"
 #include "hardware/screen.h"
+#include "hardware/screen/ssd1322.h"
 
 // skip this if you don't want every screen module call to perform null checks
 #ifndef CHECK_CR
@@ -84,6 +85,8 @@ static FT_Face face[NUM_FONTS];
 static double text_xy[2];
 
 void screen_init(void) {
+    ssd1322_init();
+
     surface = cairo_image_surface_create(CAIRO_FORMAT_A8, 128, 64);
     cr = cr_primary = cairo_create(surface);
 
@@ -207,37 +210,19 @@ void screen_init(void) {
     cairo_set_font_size(cr, 8.0);
 
     fprintf(stderr, "font setup OK.\n");
-
-    matron_io_t *io;
-    TAILQ_FOREACH(io, &io_queue, entries) {
-        if (io->ops->type != IO_SCREEN) continue;
-        matron_fb_t *fb = (matron_fb_t *)io;
-        screen_ops_t *fb_ops = (screen_ops_t *)io->ops;
-        fb_ops->bind(fb, surface);
-    }
 }
 
 void screen_deinit(void) {
+    ssd1322_deinit();
+
     CHECK_CR
     cairo_destroy(cr);
     cairo_surface_destroy(surface);
-
-    matron_io_t *io;
-    TAILQ_FOREACH(io, &io_queue, entries) {
-        if (io->ops->type != IO_SCREEN) continue;
-        io->ops->destroy(io);
-    }
 }
 
 void screen_update(void) {
     CHECK_CR
-    matron_io_t *io;
-    TAILQ_FOREACH(io, &io_queue, entries) {
-        if (io->ops->type != IO_SCREEN) continue;
-        matron_fb_t *fb = (matron_fb_t *)io;
-        screen_ops_t *fb_ops = (screen_ops_t *)io->ops;
-        fb_ops->paint(fb);
-    }
+    ssd1322_update( (uint8_t *) cairo_image_surface_get_data(surface), 8192);
 }
 
 void screen_save(void) {

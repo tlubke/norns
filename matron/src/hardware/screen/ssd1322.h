@@ -2,6 +2,7 @@
 
 #include <cairo.h>
 #include <fcntl.h>
+#include <gpiod.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -11,14 +12,13 @@
 #include <linux/types.h>
 #include <linux/spi/spidev.h>
 
-#define SPI0_0_DEVICE_PATH "/dev/spidev0.0"
+#define SPIDEV_0_0_PATH "/dev/spidev0.0"
 #define SPI0_BUS_WIDTH 8
 
 // Pinout
 // see: https://github.com/monome/norns-image/blob/main/readme-hardware.md#pinout-1
-#define SSD1322_DC_GPIO_CHIP 0
+#define SSD1322_DC_AND_RESET_GPIO_CHIP "gpiochip0"
 #define SSD1322_DC_GPIO_LINE 5
-#define SSD1322_RESET_GPIO_CHIP 0
 #define SSD1322_RESET_GPIO_LINE 6
 
 // Commands
@@ -56,7 +56,8 @@
 #define SSD1322_SET_COMMAND_LOCK              0xFD
 
 void ssd1322_init();
-void ssd1322_update(char * buf, uint32_t buflen);
+void ssd1322_deinit();
+void ssd1322_update(uint8_t * buf, uint16_t buf_len);
 void ssd1322_set_gamma(double g);
 void ssd1322_set_brightness(int b);
 void ssd1322_set_contrast(int c);

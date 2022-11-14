@@ -62,6 +62,7 @@ def build(bld):
         'ALSA',
         'LIBUDEV',
         'LIBEVDEV',
+        'LIBGPIOD',
         'CAIRO',
         'CAIRO-FT',
         'LUA53',
