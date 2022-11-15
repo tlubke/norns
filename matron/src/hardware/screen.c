@@ -270,43 +270,14 @@ void screen_gamma(double g) {
     }
 
     uint8_t grayscale_table[16];
-    double max_grayscale = 112.0; // Based on linear table default max of 112.
     for (int level = 0; level <= 15; level++) {
         double pre_gamma = level / 15.0;
         double grayscale = round( pow(pre_gamma, g) * max_grayscale );
-        double limit = (grayscale > max_grayscale) ? max_grayscale : grayscale;
-        grayscale_table[level] = (uint8_t) limit;
+        grayscale_table[level] = (uint8_t) grayscale;
     }
 
-    // Replace grayscale_table's values with the deltas between them.
-    for (int level = 15; level >= 1; level--) {
-	 uint8_t delta = grayscale_table[level] - grayscale_table[level - 1];
-         grayscale_table[level] = delta;
-    }
-
-    size_t string_size = 75;
-    char hextets[string_size];
-    sprintf(hextets, "%04x %04x %04x %04x %04x %04x %04x "
-                "%04x %04x %04x %04x %04x %04x %04x %04x",
-                grayscale_table[ 1], grayscale_table[ 2], grayscale_table[ 3],
-                grayscale_table[ 4], grayscale_table[ 5], grayscale_table[ 6],
-                grayscale_table[ 7], grayscale_table[ 8], grayscale_table[ 9],
-                grayscale_table[10], grayscale_table[11], grayscale_table[12],
-                grayscale_table[13], grayscale_table[14], grayscale_table[15]);
-
-    const char* path = "/sys/class/graphics/fb0/gamma";
-    int fd = open(path, O_WRONLY | O_NONBLOCK);
-    if( fd < 0 ){
-        fprintf(stderr, "ERROR (screen) could not open %s\n", path);
-        return;
-    }
-    else{
-        size_t written = write(fd, hextets, string_size);
-        if (written != string_size){
-            fprintf(stderr, "ERROR (screen) %s write incomplete\n", path);
-        }
-        close(fd);
-    }
+    // Safe to cast, since ssd1322_grayscale_table_t is just a struct of 16 bytes.
+    ssd1322_set_gamma((ssd1322_grayscale_table_t *) grayscale_table);
 }
 
 void screen_brightness(int v) {
@@ -323,23 +294,7 @@ void screen_brightness(int v) {
     // is limited and offset.
     v += 16;
 
-    size_t string_size = 5;
-    char hextet[string_size];
-    sprintf(hextet, "%04x", v);
-
-    const char* path = "/sys/class/graphics/fb0/precharge";
-    int fd = open(path, O_WRONLY | O_NONBLOCK);
-    if( fd < 0 ){
-        fprintf(stderr, "ERROR (screen) could not open %s\n", path);
-        return;
-    }
-    else{
-        size_t written = write(fd, hextet, string_size);
-        if (written != string_size){
-            fprintf(stderr, "ERROR (screen) %s write incomplete\n", path);
-        }
-        close(fd);
-    }
+    ssd1322_set_brightness((uint8_t) v);
 }
 
 void screen_level(int z) {

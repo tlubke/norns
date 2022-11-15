@@ -14,7 +14,6 @@ local loaded_settings = executable_lua ~= nil and executable_lua() or {}
 local brightness = loaded_settings.brightness or 15
 local gamma = loaded_settings.gamma or 1.0
 local module_just_loaded = true
-local settings_enabled = io.open("/sys/class/graphics/fb0/precharge", "w") ~= nil
 
 screensaver.event = function()
   _norns.screen_clear()

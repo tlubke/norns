@@ -174,3 +174,31 @@ void ssd1322_update(uint8_t * buf, uint16_t buf_len){
         return;
     }
 }
+
+#define LIMIT(x,y) ( (x > y) ? y : x )
+
+ssd1322_set_gamma(struct ssd1322_grayscale_table_t *t){
+    write_command_with_data(
+            SSD1322_SET_GRAY_SCALE_TABLE,
+            LIMIT(t->GS0, 0),
+            LIMIT(t->GS1,  SSD1322_GRAYSCALE_MAX_VALUE),
+            LIMIT(t->GS2,  SSD1322_GRAYSCALE_MAX_VALUE),
+            LIMIT(t->GS3,  SSD1322_GRAYSCALE_MAX_VALUE),
+            LIMIT(t->GS4,  SSD1322_GRAYSCALE_MAX_VALUE),
+            LIMIT(t->GS5,  SSD1322_GRAYSCALE_MAX_VALUE),
+            LIMIT(t->GS6,  SSD1322_GRAYSCALE_MAX_VALUE),
+            LIMIT(t->GS7,  SSD1322_GRAYSCALE_MAX_VALUE),
+            LIMIT(t->GS8,  SSD1322_GRAYSCALE_MAX_VALUE),
+            LIMIT(t->GS9,  SSD1322_GRAYSCALE_MAX_VALUE),
+            LIMIT(t->GS10, SSD1322_GRAYSCALE_MAX_VALUE),
+            LIMIT(t->GS11, SSD1322_GRAYSCALE_MAX_VALUE),
+            LIMIT(t->GS12, SSD1322_GRAYSCALE_MAX_VALUE),
+            LIMIT(t->GS13, SSD1322_GRAYSCALE_MAX_VALUE),
+            LIMIT(t->GS14, SSD1322_GRAYSCALE_MAX_VALUE),
+            LIMIT(t->GS15, SSD1322_GRAYSCALE_MAX_VALUE)
+    );
+}
+
+ssd1322_set_brightness(uint8_t b){
+    write_command_with_data(SSD1322_SET_PRECHARGE_VOLTAGE, b);
+}
