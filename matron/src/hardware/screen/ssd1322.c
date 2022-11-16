@@ -4,12 +4,7 @@ static int spidev_fd = 0;
 static struct gpiod_chip * gpio_0;
 static struct gpiod_line * gpio_dc;
 static struct gpiod_line * gpio_reset;
-
-int write_gpio(struct gpiod_line * line, uint8_t value){
-
-    gpiod_line_set_value(line, value);
-    return 0;
-}
+static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
 int open_spi() {
     uint8_t mode = SPI_MODE_0 | SPI_NO_CS;
@@ -45,9 +40,11 @@ int ssd1322_write_command(uint8_t command, uint8_t data_len, ...) {
     struct spi_ioc_transfer cmd_transfer = {0};
     struct spi_ioc_transfer data_transfer = {0};
 
+    pthread_mutex_lock(&lock);
+
     if( spidev_fd <= 0 ){
         fprintf(stderr, "ssd1322_write_command: spidev not yet opened\n");
-        return -1;
+        goto fail;
     }
 
     gpiod_line_set_value(gpio_dc, 0);
@@ -58,7 +55,7 @@ int ssd1322_write_command(uint8_t command, uint8_t data_len, ...) {
 
     if( ioctl(spidev_fd, SPI_IOC_MESSAGE(1), &cmd_transfer) < 0 ){
         fprintf(stderr, "could not send SPI command-message via ioctl().\n");
-        return -1;
+        goto fail;
     }
 
     if( data_len > 0 ){
@@ -77,11 +74,15 @@ int ssd1322_write_command(uint8_t command, uint8_t data_len, ...) {
 
         if( ioctl(spidev_fd, SPI_IOC_MESSAGE(1), &data_transfer) < 0 ){
             fprintf(stderr, "could not send SPI data-message via ioctl().\n");
-            return -1;
+            goto fail;
         }
     }
 
+    pthread_mutex_unlock(&lock);
     return 0;
+fail:
+    pthread_mutex_unlock(&lock);
+    return -1;
 }
 
 #define NUMARGS(...)  (sizeof((int[]){__VA_ARGS__}) / sizeof(int))
@@ -92,9 +93,14 @@ int ssd1322_write_command(uint8_t command, uint8_t data_len, ...) {
 
 void ssd1322_init() {
 
+    if( pthread_mutex_init(&lock, NULL) != 0 ){
+        fprintf(stderr, "%s: pthread_mutex_init failed\n", __func__);
+        return;
+    }
+
     spidev_fd = open_spi(SPIDEV_0_0_PATH);
     if( spidev_fd < 0 ){
-        fprintf(stderr, "ssd1322_init: couldn't open %s.\n", SPIDEV_0_0_PATH);
+        fprintf(stderr, "%s: couldn't open %s.\n", __func__, SPIDEV_0_0_PATH);
         return;
     }
 
@@ -111,7 +117,7 @@ void ssd1322_init() {
 
     write_command(SSD1322_SET_DISPLAY_OFF);
     write_command(SSD1322_SET_DEFAULT_LINEAR_GRAY_SCALE);
-    write_command_with_data(SSD1322_SET_OSCILLATOR_FREQUENCY, 0xF2);
+    write_command_with_data(SSD1322_SET_OSCILLATOR_FREQUENCY, 0x91);
     write_command_with_data(SSD1322_SET_MULTIPLEX_RATIO, 0x3F);
     write_command_with_data(SSD1322_SET_DISPLAY_OFFSET, 0x00);
     write_command_with_data(SSD1322_SET_DISPLAY_START_LINE, 0x00);
@@ -126,14 +132,11 @@ void ssd1322_init() {
     write_command(SSD1322_SET_DISPLAY_MODE_NORMAL);
     write_command(SSD1322_SET_DISPLAY_ON);
 
-    write_command_with_data(SSD1322_SET_COLUMN_ADDRESS, 28, 91);
-    write_command_with_data(SSD1322_SET_ROW_ADDRESS, 0, 63);
-    write_command(SSD1322_WRITE_RAM_COMMAND); // set GDDRAM for write, doesn't
-                                              // affect other commands.
 }
 
 void ssd1322_deinit(){
     if( spidev_fd > 0 ){
+        pthread_mutex_destroy(&lock);
         gpiod_line_release(gpio_reset);
         gpiod_line_release(gpio_dc);
         gpiod_chip_close(gpio_0);
@@ -144,15 +147,21 @@ void ssd1322_deinit(){
 void ssd1322_update(uint8_t * buf, uint16_t buf_len){
     struct spi_ioc_transfer transfer = {0};
 
+    write_command_with_data(SSD1322_SET_COLUMN_ADDRESS, 28, 91);
+    write_command_with_data(SSD1322_SET_ROW_ADDRESS, 0, 63);
+    write_command(SSD1322_WRITE_RAM_COMMAND);
+
+    pthread_mutex_lock(&lock);
+
     if( spidev_fd <= 0 ){
         fprintf(stderr, "%s: spidev not yet opened.\n", __func__);
-        return;
+        goto early_return;
     }
 
     if( buf_len > 8192 ){
         fprintf(stderr, "%s: buf_len greater than screen GDDRAM", __func__);
+        goto early_return;
     }
-
 
     gpiod_line_set_value(gpio_dc, 1);
 
@@ -165,21 +174,25 @@ void ssd1322_update(uint8_t * buf, uint16_t buf_len){
 
     if( ioctl(spidev_fd, SPI_IOC_MESSAGE(1), &transfer) < 0 ){
         fprintf(stderr, "%s: SPI data transfer 1 failed.\n", __func__);
-        return;
+        goto early_return;
     }
    
     transfer.tx_buf = (unsigned long) (buf + (buf_len / 2));
     
     if( ioctl(spidev_fd, SPI_IOC_MESSAGE(1), &transfer) < 0 ){
         fprintf(stderr, "%s: SPI data transfer 2 failed.\n", __func__);
-        return;
+        goto early_return;
     }
+
+early_return:
+    pthread_mutex_unlock(&lock);
+    return;
 }
 
 void ssd1322_set_gamma(ssd1322_grayscale_table_t *t){
     write_command_with_data(
-            SSD1322_SET_GRAY_SCALE_TABLE,
-            0,
+            SSD1322_SET_GRAYSCALE_TABLE,
+            // GSO is skipped.
             t->GS1,
             t->GS2,
             t->GS3,
@@ -196,6 +209,7 @@ void ssd1322_set_gamma(ssd1322_grayscale_table_t *t){
             t->GS14,
             t->GS15
     );
+    write_command(SSD1322_ENABLE_GRAYSCALE_TABLE);
 }
 
 void ssd1322_set_brightness(uint8_t b){

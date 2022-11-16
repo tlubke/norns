@@ -3,6 +3,7 @@
 #include <cairo.h>
 #include <fcntl.h>
 #include <gpiod.h>
+#include <pthread.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -23,7 +24,7 @@
 
 // Commands
 // see:
-#define SSD1322_ENABLE_GRAY_SCALE_TABLE       0x00
+#define SSD1322_ENABLE_GRAYSCALE_TABLE        0x00
 #define SSD1322_SET_COLUMN_ADDRESS            0x15
 #define SSD1322_WRITE_RAM_COMMAND             0x5C
 #define SSD1322_READ_RAM_COMMAND              0x5D
@@ -45,7 +46,7 @@
 #define SSD1322_SET_DISPLAY_ENHANCEMENT_A     0xB4
 #define SSD1322_SET_GPIO                      0xB5
 #define SSD1322_SET_SECOND_PRECHARGE_PERIOD   0xB6
-#define SSD1322_SET_GRAY_SCALE_TABLE          0xB8
+#define SSD1322_SET_GRAYSCALE_TABLE           0xB8
 #define SSD1322_SET_DEFAULT_LINEAR_GRAY_SCALE 0xB9
 #define SSD1322_SET_PRECHARGE_VOLTAGE         0xBB
 #define SSD1322_SET_VCOMH_VOLTAGE             0xBE
@@ -55,7 +56,7 @@
 #define SSD1322_SET_DISPLAY_ENHANCEMENT_B     0xD1
 #define SSD1322_SET_COMMAND_LOCK              0xFD
 
-#define SSD1322_GRAYSCALE_MAX_VALUE 112
+#define SSD1322_GRAYSCALE_MAX_VALUE 112.0
 
 typedef struct {
     uint8_t GS0; // GS0 should always be 0.
