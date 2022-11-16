@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "args.h"
 #include "hardware/io.h"
@@ -260,6 +261,42 @@ void screen_aa(int s) {
     }
     cairo_set_font_options(cr, font_options);
     cairo_font_options_destroy(font_options);
+}
+
+void screen_gamma(double g) {
+    CHECK_CR
+    if (g < 0.0) {
+        g=0;
+    }
+
+    uint8_t grayscale_table[16];
+    double max_grayscale = 112.0; // Based on linear table default max of 112.
+    for (int level = 0; level <= 15; level++) {
+        double pre_gamma = level / 15.0;
+        double grayscale = round( pow(pre_gamma, g) * max_grayscale );
+        double limit = (grayscale > max_grayscale) ? max_grayscale : grayscale;
+        grayscale_table[level] = (uint8_t) limit;
+    }
+
+    // Safe to cast, since ssd1322_grayscale_table_t is just a struct of 16 bytes.
+    ssd1322_set_gamma((ssd1322_grayscale_table_t *) grayscale_table);
+}
+
+void screen_brightness(int v) {
+    CHECK_CR
+    if (v < 0) {
+        v=0;
+    }
+    if (v > 15) {
+   	    v=15;
+    }
+
+    // True range of pre-charge voltage, AKA "brightness" is 0-31.
+    // Below 16 is too dark for the lowest screen levels, so the range
+    // is limited and offset.
+    v += 16;
+
+    ssd1322_set_brightness((uint8_t) v);
 }
 
 void screen_level(int z) {

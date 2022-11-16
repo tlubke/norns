@@ -123,12 +123,13 @@ void ssd1322_init() {
     write_command_with_data(SSD1322_SET_PHASE_LENGTH, 0xF2);
     write_command_with_data(SSD1322_SET_PRECHARGE_VOLTAGE, 0x1F);
     write_command_with_data(SSD1322_SET_VCOMH_VOLTAGE, 0x04);
+    write_command(SSD1322_SET_DISPLAY_MODE_NORMAL);
+    write_command(SSD1322_SET_DISPLAY_ON);
+
     write_command_with_data(SSD1322_SET_COLUMN_ADDRESS, 28, 91);
     write_command_with_data(SSD1322_SET_ROW_ADDRESS, 0, 63);
     write_command(SSD1322_WRITE_RAM_COMMAND); // set GDDRAM for write, doesn't
-                                              // effect other commands.
-    write_command(SSD1322_SET_DISPLAY_MODE_NORMAL);
-    write_command(SSD1322_SET_DISPLAY_ON);
+                                              // affect other commands.
 }
 
 void ssd1322_deinit(){
@@ -173,4 +174,30 @@ void ssd1322_update(uint8_t * buf, uint16_t buf_len){
         fprintf(stderr, "%s: SPI data transfer 2 failed.\n", __func__);
         return;
     }
+}
+
+void ssd1322_set_gamma(ssd1322_grayscale_table_t *t){
+    write_command_with_data(
+            SSD1322_SET_GRAY_SCALE_TABLE,
+            0,
+            t->GS1,
+            t->GS2,
+            t->GS3,
+            t->GS4,
+            t->GS5,
+            t->GS6,
+            t->GS7,
+            t->GS8,
+            t->GS9,
+            t->GS10,
+            t->GS11,
+            t->GS12,
+            t->GS13,
+            t->GS14,
+            t->GS15
+    );
+}
+
+void ssd1322_set_brightness(uint8_t b){
+    write_command_with_data(SSD1322_SET_PRECHARGE_VOLTAGE, b);
 }

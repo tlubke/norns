@@ -55,9 +55,30 @@
 #define SSD1322_SET_DISPLAY_ENHANCEMENT_B     0xD1
 #define SSD1322_SET_COMMAND_LOCK              0xFD
 
+#define SSD1322_GRAYSCALE_MAX_VALUE 112
+
+typedef struct {
+    uint8_t GS0; // GS0 should always be 0.
+    uint8_t GS1;
+    uint8_t GS2;
+    uint8_t GS3;
+    uint8_t GS4;
+    uint8_t GS5;
+    uint8_t GS6;
+    uint8_t GS7;
+    uint8_t GS8;
+    uint8_t GS9;
+    uint8_t GS10;
+    uint8_t GS11;
+    uint8_t GS12;
+    uint8_t GS13;
+    uint8_t GS14;
+    uint8_t GS15;
+} ssd1322_grayscale_table_t;
+
 void ssd1322_init();
 void ssd1322_deinit();
-void ssd1322_update(uint8_t * buf, uint16_t buf_len);
-void ssd1322_set_gamma(double g);
-void ssd1322_set_brightness(int b);
+void ssd1322_update(uint8_t *buf, uint16_t buf_len);
+void ssd1322_set_gamma(ssd1322_grayscale_table_t *);
+void ssd1322_set_brightness(uint8_t b);
 void ssd1322_set_contrast(int c);
