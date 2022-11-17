@@ -7,7 +7,7 @@ static struct gpiod_line * gpio_reset;
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
 int open_spi() {
-    uint8_t mode = SPI_MODE_0 | SPI_NO_CS;
+    uint8_t mode = SPI_MODE_0;
     uint8_t bits_per_word = SPI0_BUS_WIDTH;
     uint8_t little_endian = 0;
     uint32_t speed_hz = 1200000000 / 64; // 18.75Mhz, 1200Mhz is the CPU speed.
@@ -136,6 +136,10 @@ void ssd1322_init() {
 
 void ssd1322_deinit(){
     if( spidev_fd > 0 ){
+        // Drive RST low to turn off screen.
+        gpiod_line_set_value(gpio_reset, 0);
+
+        // Destroy file descriptors and handles.
         pthread_mutex_destroy(&lock);
         gpiod_line_release(gpio_reset);
         gpiod_line_release(gpio_dc);
@@ -160,28 +164,33 @@ void ssd1322_update(uint8_t * buf, uint16_t buf_len){
 
     if( buf_len > 8192 ){
         fprintf(stderr, "%s: buf_len greater than screen GDDRAM", __func__);
-        goto early_return;
     }
 
     gpiod_line_set_value(gpio_dc, 1);
 
+    // round up non-zero values less than 16, 8-bit anti-aliased pixels
+    // would otherwise get lost in truncation to 4-bit. Everything else
+    // is fine since the screen expects the pixel values in the upper 4
+    // bits of the byte.
+    for( uint16_t i = 0; i < buf_len; i++ ){
+        if( 16 > buf[i] && buf[i] > 0 ){
+            buf[i] |= 0x10;
+        }
+    }
+
     // The spidev module has a buffer size limit of 4096.
     // Setting it in /boot/cmdline.txt like the internet suggests didn't
     // work for me. Instead, just send two separate SPI transactions.
-
-    transfer.tx_buf = (unsigned long) buf;
-    transfer.len = (uint32_t) buf_len / 2;
-
-    if( ioctl(spidev_fd, SPI_IOC_MESSAGE(1), &transfer) < 0 ){
-        fprintf(stderr, "%s: SPI data transfer 1 failed.\n", __func__);
-        goto early_return;
-    }
-   
-    transfer.tx_buf = (unsigned long) (buf + (buf_len / 2));
-    
-    if( ioctl(spidev_fd, SPI_IOC_MESSAGE(1), &transfer) < 0 ){
-        fprintf(stderr, "%s: SPI data transfer 2 failed.\n", __func__);
-        goto early_return;
+    const uint16_t spidev_bufsize = 4096;
+    const uint16_t n_transfers = buf_len / spidev_bufsize;
+    for( uint16_t i = 0; i < n_transfers; i++ ){
+        transfer.tx_buf = (unsigned long) (buf + (i * spidev_bufsize));
+        transfer.len = (uint32_t) buf_len / n_transfers;
+        if( ioctl(spidev_fd, SPI_IOC_MESSAGE(1), &transfer) < 0 ){
+            fprintf(stderr, "%s: SPI data transfer %d of %d failed.\n",
+                            __func__,               i,    n_transfers);
+            goto early_return;
+        }
     }
 
 early_return:
@@ -189,29 +198,28 @@ early_return:
     return;
 }
 
-void ssd1322_set_gamma(ssd1322_grayscale_table_t *t){
+void ssd1322_set_gamma(uint8_t *gs){
     write_command_with_data(
-            SSD1322_SET_GRAYSCALE_TABLE,
-            // GSO is skipped.
-            t->GS1,
-            t->GS2,
-            t->GS3,
-            t->GS4,
-            t->GS5,
-            t->GS6,
-            t->GS7,
-            t->GS8,
-            t->GS9,
-            t->GS10,
-            t->GS11,
-            t->GS12,
-            t->GS13,
-            t->GS14,
-            t->GS15
+            SSD1322_SET_GRAYSCALE_TABLE, // GS0 is skipped.
+            gs[0x1], gs[0x2], gs[0x3], gs[0x4], gs[0x5],
+            gs[0x6], gs[0x7], gs[0x8], gs[0x9], gs[0xA],
+            gs[0xB], gs[0xC], gs[0xD], gs[0xE], gs[0xF]
     );
     write_command(SSD1322_ENABLE_GRAYSCALE_TABLE);
 }
 
 void ssd1322_set_brightness(uint8_t b){
     write_command_with_data(SSD1322_SET_PRECHARGE_VOLTAGE, b);
+}
+
+void ssd1322_set_contrast(uint8_t c){
+    write_command_with_data(SSD1322_SET_CONTRAST_CURRENT, c);
+}
+
+void ssd1322_invert(){
+    write_command(SSD1322_SET_DISPLAY_MODE_INVERSE);
+}
+
+void ssd1322_normal(){
+    write_command(SSD1322_SET_DISPLAY_MODE_NORMAL);
 }

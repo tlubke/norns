@@ -199,7 +199,7 @@ void screen_init(void) {
 
     cairo_set_operator(cr, CAIRO_OPERATOR_CLEAR);
     cairo_paint(cr);
-    cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
+    cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
 
     cairo_font_options_t *font_options = cairo_font_options_create();
     cairo_font_options_set_antialias(font_options, CAIRO_ANTIALIAS_GRAY);
@@ -223,7 +223,9 @@ void screen_deinit(void) {
 
 void screen_update(void) {
     CHECK_CR
+    cairo_surface_flush(surface);
     ssd1322_update( (uint8_t *) cairo_image_surface_get_data(surface), 8192);
+    cairo_surface_mark_dirty(surface);
 }
 
 void screen_save(void) {
@@ -278,8 +280,7 @@ void screen_gamma(double g) {
         grayscale_table[level] = (uint8_t) limit;
     }
 
-    // Safe to cast, since ssd1322_grayscale_table_t is just a struct of 16 bytes.
-    ssd1322_set_gamma((ssd1322_grayscale_table_t *) grayscale_table);
+    ssd1322_set_gamma(grayscale_table);
 }
 
 void screen_brightness(int v) {
@@ -299,13 +300,25 @@ void screen_brightness(int v) {
     ssd1322_set_brightness((uint8_t) v);
 }
 
+void screen_invert(){
+    CHECK_CR
+    static uint8_t inverted = 0;
+    if( inverted ){
+        ssd1322_normal();
+    }
+    else{
+        ssd1322_invert();
+    }
+    inverted ^= 0x1; // toggle trick.
+}
+
 void screen_level(int z) {
     CHECK_CR
     if(z<0)
         z=0;
     else if(z>15)
         z=15;
-    cairo_set_source_rgba(cr, 0.0, 0.0, 0.0, c[z]);
+    cairo_set_source_rgba(cr, c[z], c[z], c[z], c[z]);
 }
 
 void screen_line_width(double w) {
@@ -404,7 +417,7 @@ void screen_clear(void) {
     CHECK_CR
     cairo_set_operator(cr, CAIRO_OPERATOR_CLEAR);
     cairo_paint(cr);
-    cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
+    cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
 }
 
 double *screen_text_extents(const char *s) {
@@ -423,20 +436,38 @@ extern void screen_export_png(const char *s) {
 
 void screen_display_png(const char *filename, double x, double y) {
     int img_w, img_h;
-    // fprintf(stderr, "loading: %s\n", filename);
+    cairo_format_t img_f;
+    cairo_status_t status;
 
     image = cairo_image_surface_create_from_png(filename);
-    if (cairo_surface_status(image)) {
-        fprintf(stderr, "display_png: %s\n", cairo_status_to_string(cairo_surface_status(image)));
+    status = cairo_surface_status(image);
+
+    if ( status ) {
+        fprintf(stderr, "display_png: %s\n", cairo_status_to_string(status));
         return;
     }
 
     img_w = cairo_image_surface_get_width(image);
     img_h = cairo_image_surface_get_height(image);
+    img_f = cairo_image_surface_get_format(image);
+
+    cairo_surface_flush(image);
+
+    if( img_f == CAIRO_FORMAT_ARGB32 ){
+         uint32_t *data = (uint32_t *)cairo_image_surface_get_data(image);
+         for(int i = 0; i < (img_w * img_h); i++){
+             uint32_t r = (data[i] & 0xFF0000) >> 16;
+             uint32_t g = (data[i] & 0x00FF00) >>  8;
+             uint32_t b = (data[i] & 0x0000FF) >>  0;
+             uint32_t a = (r * 0.3) + (g * 0.59) + (b * 0.11);
+	         data[i] = (a << 24); // luminosity grayscale method.
+         }
+    }
+
+    cairo_surface_mark_dirty(image);
 
     cairo_save(cr);
     cairo_set_source_surface(cr, image, x, y);
-    // cairo_paint (cr);
     cairo_rectangle(cr, x, y, img_w, img_h);
     cairo_fill(cr);
     cairo_surface_destroy(image);
