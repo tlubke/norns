@@ -124,7 +124,6 @@ void ssd1322_init() {
     write_command_with_data(SSD1322_SET_DISPLAY_OFFSET, 0x00);
     write_command_with_data(SSD1322_SET_DISPLAY_START_LINE, 0x00);
     write_command_with_data(SSD1322_SET_VDD_REGULATOR, 0x01);
-    write_command_with_data(SSD1322_SET_DUAL_COMM_LINE_MODE, 0x16, 0x11);
     write_command_with_data(SSD1322_SET_DISPLAY_ENHANCEMENT_A, 0xA0, 0xFD);
     write_command_with_data(SSD1322_SET_CONTRAST_CURRENT, 0x7F);
     write_command_with_data(SSD1322_MASTER_CURRENT_CONTROL, 0x0F);
@@ -132,6 +131,13 @@ void ssd1322_init() {
     write_command_with_data(SSD1322_SET_PRECHARGE_VOLTAGE, 0x1F);
     write_command_with_data(SSD1322_SET_VCOMH_VOLTAGE, 0x04);
     write_command(SSD1322_SET_DISPLAY_MODE_NORMAL);
+
+    if( platform() != PLATFORM_CM3 ){
+        write_command_with_data(SSD1322_SET_DUAL_COMM_LINE_MODE, 0x04, 0x11);
+    }
+    else{
+        write_command_with_data(SSD1322_SET_DUAL_COMM_LINE_MODE, 0x16, 0x11);
+    }
 
     // Do not turn display on until the first update has been called,
     // otherwise previous GDDRAM (or noise) will display before the

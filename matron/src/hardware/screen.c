@@ -461,7 +461,7 @@ void screen_display_png(const char *filename, double x, double y) {
              uint32_t g = (data[i] & 0x00FF00) >>  8;
              uint32_t b = (data[i] & 0x0000FF) >>  0;
              uint32_t a = (r * 0.3) + (g * 0.59) + (b * 0.11);
-	         data[i] = (a << 24); // luminosity grayscale method.
+             data[i] = (a << 24); // luminosity grayscale method.
          }
     }
 

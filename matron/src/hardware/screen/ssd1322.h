@@ -14,6 +14,8 @@
 #include <linux/types.h>
 #include <linux/spi/spidev.h>
 
+#include "platform.h"
+
 #define SPIDEV_0_0_PATH "/dev/spidev0.0"
 #define SPI0_BUS_WIDTH 8
 
