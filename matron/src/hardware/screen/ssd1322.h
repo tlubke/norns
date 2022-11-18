@@ -4,7 +4,7 @@
 #include <fcntl.h>
 #include <gpiod.h>
 #include <pthread.h>
-#include <math.>
+#include <math.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -57,11 +57,15 @@
 #define SSD1322_SET_DISPLAY_ENHANCEMENT_B     0xD1
 #define SSD1322_SET_COMMAND_LOCK              0xFD
 
-#define SSD1322_PHASE_1_LENGTH 0x02 // Copied from fbtft-ssd1322.c init().
-#define SSD1322_PHASE_2_LENGTH 0xF0 // Copied from fbtft-ssd1322.c init().
+#define NORNS_PHASE_1_LENGTH 0x02 // Copied from fbtft-ssd1322.c
+#define NORNS_PHASE_2_LENGTH 0xF0 // Copied from fbtft-ssd1322.c
+#define NORNS_PHASE_LENGTH (NORNS_PHASE_1_LENGTH | NORNS_PHASE_2_LENGTH)
 #define SSD1322_PHASE_LENGTH_RESET 0x74 // (SSD1322 rev 1.2, P 33/60)
 #define SSD1322_PHASE_1_LENGTH_FROM_HEX(h) ( (h*2) + 1 )
 #define SSD1322_PHASE_2_LENGTH_FROM_HEX(h) ( h >> 4 )
+
+#define NORNS_MUX_RATIO 0x3F // Copied from fbtft-ssd1322.c
+#define SSD1322_MUX_RATIO_FROM_HEX(h) ( h + 1 )
 
 #define SSD1322_GRAYSCALE_MAX_VALUE 112.0
 

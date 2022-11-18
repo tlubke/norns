@@ -1,6 +1,7 @@
 #include "ssd1322.h"
 
 static int spidev_fd = 0;
+static int should_turn_on = 1;
 static struct gpiod_chip * gpio_0;
 static struct gpiod_line * gpio_dc;
 static struct gpiod_line * gpio_reset;
@@ -43,7 +44,7 @@ int ssd1322_write_command(uint8_t command, uint8_t data_len, ...) {
     pthread_mutex_lock(&lock);
 
     if( spidev_fd <= 0 ){
-        fprintf(stderr, "ssd1322_write_command: spidev not yet opened\n");
+        fprintf(stderr, "%s: spidev not yet opened\n", __func__);
         goto fail;
     }
 
@@ -54,7 +55,7 @@ int ssd1322_write_command(uint8_t command, uint8_t data_len, ...) {
     cmd_transfer.len = (uint32_t) sizeof(cmd_buf);
 
     if( ioctl(spidev_fd, SPI_IOC_MESSAGE(1), &cmd_transfer) < 0 ){
-        fprintf(stderr, "could not send SPI command-message via ioctl().\n");
+        fprintf(stderr, "%s: could not send command-message.\n", __func__);
         goto fail;
     }
 
@@ -73,7 +74,7 @@ int ssd1322_write_command(uint8_t command, uint8_t data_len, ...) {
         data_transfer.len = (uint32_t) data_len;
 
         if( ioctl(spidev_fd, SPI_IOC_MESSAGE(1), &data_transfer) < 0 ){
-            fprintf(stderr, "could not send SPI data-message via ioctl().\n");
+            fprintf(stderr, "%s: could not send data-message.\n", __func__);
             goto fail;
         }
     }
@@ -115,10 +116,11 @@ void ssd1322_init() {
     // "Keep this pin pull HIGH during normal operation"
     gpiod_line_set_value(gpio_reset, 1);
 
+    // All values copied from fbtft-ssd1322.c from monome/linux repo.
     write_command(SSD1322_SET_DISPLAY_OFF);
     write_command(SSD1322_SET_DEFAULT_LINEAR_GRAY_SCALE);
     write_command_with_data(SSD1322_SET_OSCILLATOR_FREQUENCY, 0x91);
-    write_command_with_data(SSD1322_SET_MULTIPLEX_RATIO, 0x3F);
+    write_command_with_data(SSD1322_SET_MULTIPLEX_RATIO, NORNS_MUX_RATIO);
     write_command_with_data(SSD1322_SET_DISPLAY_OFFSET, 0x00);
     write_command_with_data(SSD1322_SET_DISPLAY_START_LINE, 0x00);
     write_command_with_data(SSD1322_SET_VDD_REGULATOR, 0x01);
@@ -126,12 +128,14 @@ void ssd1322_init() {
     write_command_with_data(SSD1322_SET_DISPLAY_ENHANCEMENT_A, 0xA0, 0xFD);
     write_command_with_data(SSD1322_SET_CONTRAST_CURRENT, 0x7F);
     write_command_with_data(SSD1322_MASTER_CURRENT_CONTROL, 0x0F);
-    write_command_with_data(SSD1322_SET_PHASE_LENGTH, 0xF2);
+    write_command_with_data(SSD1322_SET_PHASE_LENGTH, NORNS_PHASE_LENGTH);
     write_command_with_data(SSD1322_SET_PRECHARGE_VOLTAGE, 0x1F);
     write_command_with_data(SSD1322_SET_VCOMH_VOLTAGE, 0x04);
     write_command(SSD1322_SET_DISPLAY_MODE_NORMAL);
-    write_command(SSD1322_SET_DISPLAY_ON);
 
+    // Do not turn display on until the first update has been called,
+    // otherwise previous GDDRAM (or noise) will display before the
+    // "hello" startup screen.
 }
 
 void ssd1322_deinit(){
@@ -154,6 +158,11 @@ void ssd1322_update(uint8_t * buf, uint16_t buf_len){
     write_command_with_data(SSD1322_SET_COLUMN_ADDRESS, 28, 91);
     write_command_with_data(SSD1322_SET_ROW_ADDRESS, 0, 63);
     write_command(SSD1322_WRITE_RAM_COMMAND);
+
+    if( should_turn_on ){
+        write_command(SSD1322_SET_DISPLAY_ON);
+        should_turn_on = 0;
+    }
 
     pthread_mutex_lock(&lock);
 
@@ -243,27 +252,28 @@ void ssd1322_set_refresh_rate(uint8_t hz){
     //
     //       We can find an approximate solution for values to give F and D, in
     //       order to have a frame frequency close to the argument "hz".
-    static const uint8_t x_constant = 10; // (SSD1322, rev 1.2, P 23/60)
-    static const uint8_t x = x_constant + SSD1322_GRAYSCALE_MAX_VALUE;
-    static const uint8_t p1 = SSD1322_PHASE_1_LENGTH_FROM_HEX(SSD1322_PHASE_1_LENGTH);
-    static const uint8_t p2 = SSD1322_PHASE_2_LENGTH_FROM_HEX(SSD1322_PHASE_2_LENGTH);
-    static const uint8_t k = p1 + p2 + x;
+    const uint8_t x_constant = 10; // (SSD1322, rev 1.2, P 23/60)
+    const uint8_t x = x_constant + SSD1322_GRAYSCALE_MAX_VALUE;
+    const uint8_t p1 = SSD1322_PHASE_1_LENGTH_FROM_HEX(NORNS_PHASE_1_LENGTH);
+    const uint8_t p2 = SSD1322_PHASE_2_LENGTH_FROM_HEX(NORNS_PHASE_2_LENGTH);
+    const uint8_t k = p1 + p2 + x;
+    const uint8_t mux_count = SSD1322_MUX_RATIO_FROM_HEX(NORNS_MUX_RATIO);
 
     static uint8_t past_solutions[256] = {};
 
     if( past_solutions[hz] == 0 ){
-        // There MUST be a better algorithm for this, but for now just brute-force
-        // the approximations and save them off for subsequent calls.
+        // There MUST be a better algorithm for this, but for now it will just
+        // brute-force the approximations, saving them for subsequent calls.
         double closest_solution = 0.0;
         for( uint8_t osc_div = 0; osc_div < 0xFF; osc_div++ ){
             double osc = (double) (osc_div >> 4);
             double div = (double) (osc_div & 0xF);
             osc = 1.75 + (osc *  0.02375);
-            div = pow(div, 2.0);
+            div = pow(2.0, div);
 
-            double solution = osc / (div * (double) k);
-            double mhz_float = (double) (hz * 0.000001);
-            if( fabs(mhz_float - solution) < fabs(mhz_float - closest_solution) ){
+            double solution = osc / (div * (double) k * (double) mux_count);
+            double mhz = (double) (hz * 0.000001);
+            if( fabs(mhz - solution) < fabs(mhz - closest_solution) ){
                 past_solutions[hz] = osc_div;
                 closest_solution = solution;
             }
