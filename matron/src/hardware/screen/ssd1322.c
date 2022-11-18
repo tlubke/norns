@@ -198,6 +198,19 @@ early_return:
     return;
 }
 
+
+void ssd1322_set_brightness(uint8_t b){
+    write_command_with_data(SSD1322_SET_PRECHARGE_VOLTAGE, b);
+}
+
+void ssd1322_set_contrast(uint8_t c){
+    write_command_with_data(SSD1322_SET_CONTRAST_CURRENT, c);
+}
+
+void ssd1322_set_display_mode(ssd1322_display_mode_t mode_offset){
+    write_command(SSD1322_SET_DISPLAY_MODE_ALL_OFF + mode_offset);
+}
+
 void ssd1322_set_gamma(uint8_t *gs){
     write_command_with_data(
             SSD1322_SET_GRAYSCALE_TABLE, // GS0 is skipped.
@@ -208,18 +221,56 @@ void ssd1322_set_gamma(uint8_t *gs){
     write_command(SSD1322_ENABLE_GRAYSCALE_TABLE);
 }
 
-void ssd1322_set_brightness(uint8_t b){
-    write_command_with_data(SSD1322_SET_PRECHARGE_VOLTAGE, b);
-}
+void ssd1322_set_refresh_rate(uint8_t hz){
+    // From the SSD1322 reference doc (rev 1.2, P 23/60):
+    //
+    // D = Clock-divide ratio, set by 0xA3 command [bits 0-3], Int range [1,16]
+    // X = DCLCKs in current drive period. Default is 10 + GS15 value, i.e. 122
+    // K = Phase-1 period + Phase-2 period + X.
+    //
+    // Frequency of Frame = Frequency of Oscillator (F)
+    //                      ---------------------------
+    //                           D * K * No. of Mux
+    //
+    // F has a range of 1.75Mhz through 2.13 Mhz, with a step size of 23.75Khz.
+    // Derived from (2.13Mhz - 1.75Mhz) / 16 steps. (SSD1322, rev 1.2, P 50/60)
+    //
+    // Note: I can't see a reason for changing "K", or "No. of Mux" at this
+    //       time, so controlling the refresh rate will primarily be done via
+    //       altering the oscillator frequency and clock-divide ratio. If the
+    //       max grayscale value (i.e. GS15, 112) is ever raised, this function
+    //       will need to be rewritten.
+    //
+    //       We can find an approximate solution for values to give F and D, in
+    //       order to have a frame frequency close to the argument "hz".
+    static const uint8_t x_constant = 10; // (SSD1322, rev 1.2, P 23/60)
+    static const uint8_t x = x_constant + SSD1322_GRAYSCALE_MAX_VALUE;
+    static const uint8_t p1 = SSD1322_PHASE_1_LENGTH_FROM_HEX(SSD1322_PHASE_1_LENGTH);
+    static const uint8_t p2 = SSD1322_PHASE_2_LENGTH_FROM_HEX(SSD1322_PHASE_2_LENGTH);
+    static const uint8_t k = p1 + p2 + x;
 
-void ssd1322_set_contrast(uint8_t c){
-    write_command_with_data(SSD1322_SET_CONTRAST_CURRENT, c);
-}
+    static uint8_t past_solutions[256] = {};
 
-void ssd1322_invert(){
-    write_command(SSD1322_SET_DISPLAY_MODE_INVERSE);
-}
+    if( past_solutions[hz] == 0 ){
+        // There MUST be a better algorithm for this, but for now just brute-force
+        // the approximations and save them off for subsequent calls.
+        double closest_solution = 0.0;
+        for( uint8_t osc_div = 0; osc_div < 0xFF; osc_div++ ){
+            double osc = (double) (osc_div >> 4);
+            double div = (double) (osc_div & 0xF);
+            osc = 1.75 + (osc *  0.02375);
+            div = pow(div, 2.0);
 
-void ssd1322_normal(){
-    write_command(SSD1322_SET_DISPLAY_MODE_NORMAL);
+            double solution = osc / (div * (double) k);
+            double mhz_float = (double) (hz * 0.000001);
+            if( fabs(mhz_float - solution) < fabs(mhz_float - closest_solution) ){
+                past_solutions[hz] = osc_div;
+                closest_solution = solution;
+            }
+        }
+    }
+
+    uint8_t freq = past_solutions[hz];
+
+    write_command_with_data(SSD1322_SET_OSCILLATOR_FREQUENCY, freq);
 }

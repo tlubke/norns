@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <gpiod.h>
 #include <pthread.h>
+#include <math.>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -56,13 +57,26 @@
 #define SSD1322_SET_DISPLAY_ENHANCEMENT_B     0xD1
 #define SSD1322_SET_COMMAND_LOCK              0xFD
 
+#define SSD1322_PHASE_1_LENGTH 0x02 // Copied from fbtft-ssd1322.c init().
+#define SSD1322_PHASE_2_LENGTH 0xF0 // Copied from fbtft-ssd1322.c init().
+#define SSD1322_PHASE_LENGTH_RESET 0x74 // (SSD1322 rev 1.2, P 33/60)
+#define SSD1322_PHASE_1_LENGTH_FROM_HEX(h) ( (h*2) + 1 )
+#define SSD1322_PHASE_2_LENGTH_FROM_HEX(h) ( h >> 4 )
+
 #define SSD1322_GRAYSCALE_MAX_VALUE 112.0
+
+typedef enum {
+    SSD1322_DISPLAY_MODE_ALL_OFF = 0,
+    SSD1322_DISPLAY_MODE_ALL_ON,
+    SSD1322_DISPLAY_MODE_NORMAL,
+    SSD1322_DISPLAY_MODE_INVERT,
+} ssd1322_display_mode_t;
 
 void ssd1322_init();
 void ssd1322_deinit();
 void ssd1322_update(uint8_t *buf, uint16_t buf_len);
-void ssd1322_set_gamma(uint8_t *grayscale_table);
 void ssd1322_set_brightness(uint8_t b);
 void ssd1322_set_contrast(uint8_t c);
-void ssd1322_invert();
-void ssd1322_normal();
+void ssd1322_set_display_mode(ssd1322_display_mode_t);
+void ssd1322_set_gamma(uint8_t *grayscale_table);
+void ssd1322_set_refresh_rate(uint8_t hz);

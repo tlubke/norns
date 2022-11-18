@@ -87,6 +87,7 @@ static double text_xy[2];
 
 void screen_init(void) {
     ssd1322_init();
+    ssd1322_set_refresh_rate(120);
 
     surface = cairo_image_surface_create(CAIRO_FORMAT_A8, 128, 64);
     cr = cr_primary = cairo_create(surface);
@@ -304,10 +305,10 @@ void screen_invert(){
     CHECK_CR
     static uint8_t inverted = 0;
     if( inverted ){
-        ssd1322_normal();
+        ssd1322_set_display_mode(SSD1322_DISPLAY_MODE_NORMAL);
     }
     else{
-        ssd1322_invert();
+        ssd1322_set_display_mode(SSD1322_DISPLAY_MODE_INVERT);
     }
     inverted ^= 0x1; // toggle trick.
 }
@@ -318,7 +319,7 @@ void screen_level(int z) {
         z=0;
     else if(z>15)
         z=15;
-    cairo_set_source_rgba(cr, c[z], c[z], c[z], c[z]);
+    cairo_set_source_rgba(cr, 0.0, 0.0, 0.0, c[z]);
 }
 
 void screen_line_width(double w) {
@@ -513,7 +514,7 @@ void screen_poke(int x, int y, int w, int h, unsigned char *buf) {
             data[j * 128 + i] = pixel | (pixel << 4);
         }
     }
-    cairo_surface_mark_dirty(surface);
+    cairo_surface_mark_dirty_rectangle(surface, x, y, w, h);
 }
 
 void screen_rotate(double r) {
