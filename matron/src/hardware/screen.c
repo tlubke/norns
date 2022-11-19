@@ -506,6 +506,15 @@ void screen_display_png(const char *filename, double x, double y) {
     else if( img_f == CAIRO_FORMAT_A8 ){
         gray_u8 = (uint8_t *) cairo_image_surface_get_data(image);
     }
+    else{
+        fprintf(
+            stderr,
+            "display_png: unsupported format=%d for %s, please open an issue"
+            "on github at https://github.com/monome/norns/issues wih the PNG\n",
+            img_f,
+            filename
+        );
+    }
 
     uint8_t * dst_data = (uint8_t *) cairo_image_surface_get_data(surface);
     for(int j = 0; j < img_h; j++){
