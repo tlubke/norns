@@ -439,13 +439,14 @@ void screen_display_png(const char *filename, double x, double y) {
     int img_w, img_h;
     cairo_format_t img_f;
     cairo_status_t status;
+    uint8_t * gray_u8;
 
     image = cairo_image_surface_create_from_png(filename);
     status = cairo_surface_status(image);
 
     if ( status ) {
         fprintf(stderr, "display_png: %s\n", cairo_status_to_string(status));
-        return;
+        goto destroy_image;
     }
 
     img_w = cairo_image_surface_get_width(image);
@@ -454,25 +455,76 @@ void screen_display_png(const char *filename, double x, double y) {
 
     cairo_surface_flush(image);
 
-    if( img_f == CAIRO_FORMAT_ARGB32 ){
-         uint32_t *data = (uint32_t *)cairo_image_surface_get_data(image);
-         for(int i = 0; i < (img_w * img_h); i++){
-             uint32_t r = (data[i] & 0xFF0000) >> 16;
-             uint32_t g = (data[i] & 0x00FF00) >>  8;
-             uint32_t b = (data[i] & 0x0000FF) >>  0;
-             uint32_t a = (r * 0.3) + (g * 0.59) + (b * 0.11);
-             data[i] = (a << 24); // luminosity grayscale method.
-         }
+    if( img_f != CAIRO_FORMAT_A8 ){
+        gray_u8 = malloc(img_w * img_h);
+        if( gray_u8 == NULL ){
+            fprintf(stderr, "display_png: malloc failed for transfer buffer\n");
+            goto destroy_image;
+        }
     }
 
-    cairo_surface_mark_dirty(image);
+    // https://en.wikipedia.org/wiki/Grayscale#Converting_color_to_grayscale
+    // Use "perceptual luminance-preserving" conversion to grayscale.
+    //
+    // Y' = 0.299R' + 0.587G' + 0.114B'
+    //
+    // For the cairo formats that don't store RGB in 8-bit values, scale these
+    // constants by the difference in resolution (bit-depth).
+    //
+    // RGB565: R has 8 times fewer, G has 4 times fewer, B has 8 times fewer.
+    // RGB30: R has 4 times more, G has 4 times more, B has 4 times more.
+    if( img_f == CAIRO_FORMAT_ARGB32 || img_f == CAIRO_FORMAT_RGB24 ){
+        uint32_t *data = (uint32_t *) cairo_image_surface_get_data(image);
+        for(int i = 0; i < (img_w * img_h); i++){
+            uint32_t r = (data[i] & 0xFF0000) >> 16;
+            uint32_t g = (data[i] & 0x00FF00) >>  8;
+            uint32_t b = (data[i] & 0x0000FF) >>  0;
+            uint32_t a = (r * 0.3) + (g * 0.59) + (b * 0.11);
+            gray_u8[i] = (uint8_t) a;
+        }
+    }
+    else if( img_f == CAIRO_FORMAT_RGB16_565 ){
+        uint16_t *data = (uint16_t *) cairo_image_surface_get_data(image);
+        for(int i = 0; i < (img_w * img_h); i++){
+            uint32_t r = (data[i] & 0b1111100000000000) >> 11;
+            uint32_t g = (data[i] & 0b0000011111100000) >>  5;
+            uint32_t b = (data[i] & 0b0000000000011111) >>  0;
+            uint32_t a = (r * 2.4) + (g * 2.36) + (b * 0.88);
+            gray_u8[i] = (uint8_t) a;
+        }
+    }
+    else if( img_f == CAIRO_FORMAT_RGB30 ){
+        uint32_t *data = (uint32_t *) cairo_image_surface_get_data(image);
+        for(int i = 0; i < (img_w * img_h); i++){
+            uint32_t r = (data[i] & 0x3FF00000) >> 20;
+            uint32_t g = (data[i] & 0x000FFC00) >> 10;
+            uint32_t b = (data[i] & 0x000003FF) >>  0;
+            uint32_t a = (r * 0.075) + (g * 0.1475) + (b * 0.0275);
+            gray_u8[i] = (uint8_t) a;
+        }
+    }
+    else if( img_f == CAIRO_FORMAT_A8 ){
+        gray_u8 = (uint8_t *) cairo_image_surface_get_data(image);
+    }
 
-    cairo_save(cr);
-    cairo_set_source_surface(cr, image, x, y);
-    cairo_rectangle(cr, x, y, img_w, img_h);
-    cairo_fill(cr);
+    uint8_t * dst_data = (uint8_t *) cairo_image_surface_get_data(surface);
+    for(int j = 0; j < img_h; j++){
+        for(int i = 0; i < img_w; i++){
+            int dst_pix = ((j + y) * 128) + (i + x);
+            if( dst_pix < 8192 ){
+                dst_data[dst_pix] = gray_u8[(j * img_w) + i];
+            }
+        }
+    }
+
+    cairo_surface_mark_dirty_rectangle(surface, x, y, img_w, img_h);
+
+    if( img_f != CAIRO_FORMAT_A8 ){
+        free(gray_u8);
+    }
+
+destroy_image:
     cairo_surface_destroy(image);
-    cairo_restore(cr);
 }
 
 char *screen_peek(int x, int y, int *w, int *h) {
