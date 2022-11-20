@@ -301,6 +301,17 @@ void screen_brightness(int v) {
     ssd1322_set_brightness((uint8_t) v);
 }
 
+void screen_contrast(int c){
+    CHECK_CR
+    if (c < 0) {
+        c=0;
+    }
+    if (c > 255) {
+        c=255;
+    }
+    ssd1322_set_contrast((uint8_t) c);
+}
+
 void screen_invert(){
     CHECK_CR
     static uint8_t inverted = 0;
@@ -463,23 +474,15 @@ void screen_display_png(const char *filename, double x, double y) {
         }
     }
 
-    // https://en.wikipedia.org/wiki/Grayscale#Converting_color_to_grayscale
-    // Use "perceptual luminance-preserving" conversion to grayscale.
-    //
-    // Y' = 0.299R' + 0.587G' + 0.114B'
-    //
     // For the cairo formats that don't store RGB in 8-bit values, scale these
     // constants by the difference in resolution (bit-depth).
-    //
-    // RGB565: R has 8 times fewer, G has 4 times fewer, B has 8 times fewer.
-    // RGB30: R has 4 times more, G has 4 times more, B has 4 times more.
     if( img_f == CAIRO_FORMAT_ARGB32 || img_f == CAIRO_FORMAT_RGB24 ){
         uint32_t *data = (uint32_t *) cairo_image_surface_get_data(image);
         for(int i = 0; i < (img_w * img_h); i++){
             uint32_t r = (data[i] & 0xFF0000) >> 16;
             uint32_t g = (data[i] & 0x00FF00) >>  8;
             uint32_t b = (data[i] & 0x0000FF) >>  0;
-            uint32_t a = (r * 0.3) + (g * 0.59) + (b * 0.11);
+            uint32_t a = (r + g + b) / 3;
             gray_u8[i] = (uint8_t) a;
         }
     }
@@ -489,7 +492,7 @@ void screen_display_png(const char *filename, double x, double y) {
             uint32_t r = (data[i] & 0b1111100000000000) >> 11;
             uint32_t g = (data[i] & 0b0000011111100000) >>  5;
             uint32_t b = (data[i] & 0b0000000000011111) >>  0;
-            uint32_t a = (r * 2.4) + (g * 2.36) + (b * 0.88);
+            uint32_t a = ((r * 8) + (g * 4) + (b * 8)) / 3;
             gray_u8[i] = (uint8_t) a;
         }
     }
@@ -499,7 +502,7 @@ void screen_display_png(const char *filename, double x, double y) {
             uint32_t r = (data[i] & 0x3FF00000) >> 20;
             uint32_t g = (data[i] & 0x000FFC00) >> 10;
             uint32_t b = (data[i] & 0x000003FF) >>  0;
-            uint32_t a = (r * 0.075) + (g * 0.1475) + (b * 0.0275);
+            uint32_t a = ((r * 0.25) + (g * 0.25) + (b * 0.25)) / 3;
             gray_u8[i] = (uint8_t) a;
         }
     }

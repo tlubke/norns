@@ -1,5 +1,6 @@
 local map = {}
 local brightness = 15
+local contrast = 127
 local gamma = 1.0
 
 map[0] = {
@@ -10,10 +11,17 @@ map[0] = {
   is_default = function(_) return brightness == 15 end,
 }
 map[1] = {
-  position = {x=56, y=56},
+  position = {x=54, y=56},
+  name = "CONTRAST",
+  get = function(_) return contrast end,
+  set = function(d) contrast = util.clamp(0, contrast + d, 255) end,
+  is_default = function(_) return contrast == 127 end,
+}
+map[2] = {
+  position = {x=98, y=56},
   name = "GAMMA",
   get = function(_) return string.format("%.2f", gamma) end,
-  set = function(d) gamma = util.clamp(0.0, gamma + (d * 0.01),  30.0) end,
+  set = function(d) gamma = util.clamp(1.0, gamma + (d * 0.01),  30.0) end,
   is_default = function(_) return gamma > 0.999 and gamma < 1.001 end,
 }
 
@@ -23,7 +31,8 @@ local load_settings = function()
 
   local loaded_settings = executable_lua() or {}
   brightness = loaded_settings.brightness or 15
-  gamma = loaded_settings.gamma or   1.0
+  contrast = loaded_settings.contrast or 128
+  gamma = loaded_settings.gamma or 1.0
 end
 
 local save_settings = function()
@@ -31,6 +40,7 @@ local save_settings = function()
   if err then return err end
   local s = ""
   s = s.."brightness="..brightness..","
+  s = s.."contrast="..contrast..","
   s = s.."gamma="..gamma..","
   file:write("return {"..s.."}")
   file:close()
@@ -40,6 +50,7 @@ local m = {
   list = {
     map[0].name,
     map[1].name,
+    map[2].name
   },
   pos = 0,
   len = tab.count(map),
@@ -58,6 +69,7 @@ m.enc = function(n,delta)
   elseif n==3 then
     map[m.pos].set(delta)
     _norns.screen_brightness(brightness)
+    _norns.screen_contrast(contrast)
     _norns.screen_gamma(gamma)
     save_settings()
     _menu.redraw()
