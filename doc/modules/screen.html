@@ -1227,7 +1227,7 @@
          blending mode (see list), strings are case-insensitive, include '_' between words
 <p> more info at https://www.cairographics.org/operators/
 <p> there are other operators available, see the above link or use tab.print(screen.BLEND_MODES) in the REPL for the full list.
-<p> 0 Over (default)
+<p> 0 Source (default)
 <p> 1 XOR: clears any overlapping pixels.
 <p> 2 Add: adds together the alpha (brightness) of overlapping pixels.
 <p> 3 Multiply: multiplies the colors of overlapping pixels, the result is always darker than the two inputs.
@@ -1251,7 +1251,7 @@
     <ul>
         <li><pre class="example"><span class="comment">-- number vs. string input
 </span>screen.blend_mode(<span class="number">0</span>)
-screen.blend_mode(<span class="string">'over'</span>)</pre></li>
+screen.blend_mode(<span class="string">'source'</span>)</pre></li>
         <li><pre class="example"><span class="comment">-- case-insensitivity
 </span>screen.blend_mode(<span class="string">'hard_light'</span>)
 screen.blend_mode(<span class="string">'hArD_lIgHt'</span>)
