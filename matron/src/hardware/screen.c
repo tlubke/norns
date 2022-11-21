@@ -224,9 +224,41 @@ void screen_deinit(void) {
 
 void screen_update(void) {
     CHECK_CR
+    static uint8_t overrun = 0b00000001; // Window starts at the smallest size.
+    static struct timespec last_update = {};
+    static struct timespec this_update = {};
+    clock_gettime(CLOCK_MONOTONIC_RAW, &this_update);
+
+    static const int limit = 60;
+    static const int limit_ms = ceil(1000 / limit);
+    // Use scientific notation (e.g. 1e6) to keep lines within 80 characters.
+    long this_ms = (this_update.tv_sec * 1e3) + (this_update.tv_nsec/1e6);
+    long last_ms = (last_update.tv_sec * 1e3) + (last_update.tv_nsec/1e6);
+
+    // Allow an exponentially resizing window for extra "overrun" frames.
+    // In cases where the update comes within the fps limit, or outside the
+    // window, grow the window. Otherwise, when outside the fps limit but
+    // inside the window, the window shrinks by a factor of two, restricted
+    // to the duration of the fps limit itself. Implementation uses a single
+    // byte and bit-shifting to make this "cheap". The size of the type could
+    // be increased to allow for larger bursts of screen updates.
+    if( this_ms >= (last_ms + limit_ms) ){
+        overrun = (overrun & 0b10000000) | (overrun << 1);
+        goto send_buffer;
+    }
+    else if ( this_ms >= (last_ms + (limit_ms / (overrun + 1))) ){
+        overrun = (overrun & 0b00000001) | (overrun >> 1);
+        goto send_buffer;
+    }
+    else{
+        overrun = (overrun & 0b10000000) | (overrun << 1);
+    }
+
+    return;
+send_buffer:
     cairo_surface_flush(surface);
-    ssd1322_update( (uint8_t *) cairo_image_surface_get_data(surface), 8192);
-    cairo_surface_mark_dirty(surface);
+    ssd1322_update((uint8_t *) cairo_image_surface_get_data(surface), 8192);
+    clock_gettime(CLOCK_MONOTONIC_RAW, &last_update);
 }
 
 void screen_save(void) {

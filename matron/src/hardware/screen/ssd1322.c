@@ -193,10 +193,7 @@ void ssd1322_update(uint8_t * buf, uint16_t buf_len){
         }
     }
 
-    // The spidev module has a buffer size limit of 4096.
-    // Setting it in /boot/cmdline.txt like the internet suggests didn't
-    // work for me. Instead, just send two separate SPI transactions.
-    const uint16_t spidev_bufsize = 4096;
+    const uint16_t spidev_bufsize = 8192;
     const uint16_t n_transfers = buf_len / spidev_bufsize;
     for( uint16_t i = 0; i < n_transfers; i++ ){
         transfer.tx_buf = (unsigned long) (buf + (i * spidev_bufsize));
