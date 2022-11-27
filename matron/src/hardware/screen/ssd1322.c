@@ -2,6 +2,7 @@
 
 static int spidev_fd = 0;
 static int should_turn_on = 1;
+static uint8_t * spidev_buffer;
 static struct gpiod_chip * gpio_0;
 static struct gpiod_line * gpio_dc;
 static struct gpiod_line * gpio_reset;
@@ -99,11 +100,18 @@ void ssd1322_init() {
         return;
     }
 
+    spidev_buffer = calloc(8192, sizeof(uint8_t));
+    if( spidev_buffer == NULL ){
+        fprintf(stderr, "%s: couldn't allocate spidev_buffer\n", __func__);
+    }
+
     spidev_fd = open_spi(SPIDEV_0_0_PATH);
     if( spidev_fd < 0 ){
         fprintf(stderr, "%s: couldn't open %s.\n", __func__, SPIDEV_0_0_PATH);
         return;
     }
+
+
 
     gpio_0 = gpiod_chip_open_by_name(SSD1322_DC_AND_RESET_GPIO_CHIP);
     gpio_dc = gpiod_chip_get_line(gpio_0, SSD1322_DC_GPIO_LINE);
@@ -158,8 +166,13 @@ void ssd1322_deinit(){
     }
 }
 
-void ssd1322_update(uint8_t * buf, uint16_t buf_len){
+void ssd1322_update(cairo_surface_t * surface, int surface_may_have_color){
     struct spi_ioc_transfer transfer = {0};
+
+    if( spidev_fd <= 0 ){
+        fprintf(stderr, "%s: spidev not yet opened.\n", __func__);
+        return;
+    }
 
     write_command_with_data(SSD1322_SET_COLUMN_ADDRESS, 28, 91);
     write_command_with_data(SSD1322_SET_ROW_ADDRESS, 0, 63);
@@ -172,32 +185,49 @@ void ssd1322_update(uint8_t * buf, uint16_t buf_len){
 
     pthread_mutex_lock(&lock);
 
-    if( spidev_fd <= 0 ){
-        fprintf(stderr, "%s: spidev not yet opened.\n", __func__);
+    const uint32_t surface_w = cairo_image_surface_get_width(surface);
+    const uint32_t surface_h = cairo_image_surface_get_height(surface);
+    cairo_format_t surface_f = cairo_image_surface_get_format(surface);
+
+    if(surface_w != 128 || surface_h != 64 || surface_f != CAIRO_FORMAT_ARGB32){
+        fprintf(stderr, "%s: %ux%u = invalid surface size\n", __func__, surface_w, surface_h);
         goto early_return;
     }
 
-    if( buf_len > 8192 ){
-        fprintf(stderr, "%s: buf_len greater than screen GDDRAM", __func__);
+    const uint32_t tx_len = surface_w * surface_h;
+    const uint32_t * data = (const uint32_t *) cairo_image_surface_get_data(surface);
+
+    if( surface_may_have_color ){
+        // Preserve luminance of RGB when converting to grayscale. Use the
+        // closest multiple of 16 to the fraction to scale the channels'
+        // grayscale value. Use a multiple of 16 because a 4-bit grayscale
+        // value should fit into the upper nibble of the 8-bit value. The
+        // decimal approximation is out of 256: 80 + 160 + 16 = 256.
+        for( uint32_t i = 0; i < tx_len; i += 8 ){
+            uint8x8x4_t pixel = vld4_u8((const uint8_t *) (data + i));
+            uint16x8_t r = vmull_u8(pixel.val[2], vdup_n_u8( 80)); // R * ~ 0.30
+            uint16x8_t g = vmull_u8(pixel.val[1], vdup_n_u8(160)); // G * ~ 0.59
+            uint16x8_t b = vmull_u8(pixel.val[0], vdup_n_u8( 16)); // B * ~ 0.11
+            vst1_u8(spidev_buffer + i, vaddhn_u16(vaddq_u16(r,g), b));
+        }
+    }
+    else{
+        // If the surface has only been drawn to, we can guarantee that RGB are
+        // all equal values representing a grayscale value. So, we can take any
+        // of those channels arbitrarily.
+        for( uint32_t i = 0; i < buf_len; i += 16 ){
+            const uint8x16x4_t RGB = vld4q_u8((uint8_t *) (data + i));
+            vst1q_u8(spidev_buffer + i, RGB.val[0]);
+        }
     }
 
     gpiod_line_set_value(gpio_dc, 1);
 
-    // round up non-zero values less than 16, 8-bit anti-aliased pixels
-    // would otherwise get lost in truncation to 4-bit. Everything else
-    // is fine since the screen expects the pixel values in the upper 4
-    // bits of the byte.
-    for( uint16_t i = 0; i < buf_len; i++ ){
-        if( 16 > buf[i] && buf[i] > 0 ){
-            buf[i] |= 0x10;
-        }
-    }
-
-    const uint16_t spidev_bufsize = 8192;
-    const uint16_t n_transfers = buf_len / spidev_bufsize;
-    for( uint16_t i = 0; i < n_transfers; i++ ){
-        transfer.tx_buf = (unsigned long) (buf + (i * spidev_bufsize));
-        transfer.len = (uint32_t) buf_len / n_transfers;
+    const uint32_t spidev_bufsize = 8192;
+    const uint32_t n_transfers = tx_len / spidev_bufsize;
+    for( uint32_t i = 0; i < n_transfers; i++ ){
+        transfer.tx_buf = (unsigned long) (spidev_buffer + (i * spidev_bufsize));
+        transfer.len = (uint32_t) tx_len / n_transfers;
         if( ioctl(spidev_fd, SPI_IOC_MESSAGE(1), &transfer) < 0 ){
             fprintf(stderr, "%s: SPI data transfer %d of %d failed.\n",
                             __func__,               i,    n_transfers);
@@ -286,4 +316,9 @@ void ssd1322_set_refresh_rate(uint8_t hz){
     uint8_t freq = past_solutions[hz];
 
     write_command_with_data(SSD1322_SET_OSCILLATOR_FREQUENCY, freq);
+}
+
+uint8_t* ssd1322_resize_buffer(size_t size){
+    spidev_buffer = realloc(spidev_buffer, size);
+    return spidev_buffer;
 }

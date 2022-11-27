@@ -78,6 +78,7 @@ static cairo_surface_t *surface;
 static cairo_surface_t *image;
 static cairo_t *cr;
 static cairo_t *cr_primary;
+static int surface_may_have_color = 0;
 
 static cairo_font_face_t *ct[NUM_FONTS];
 static FT_Library value;
@@ -89,7 +90,7 @@ void screen_init(void) {
     ssd1322_init();
     ssd1322_set_refresh_rate(120);
 
-    surface = cairo_image_surface_create(CAIRO_FORMAT_A8, 128, 64);
+    surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 128, 64);
     cr = cr_primary = cairo_create(surface);
 
     status = FT_Init_FreeType(&value);
@@ -200,7 +201,7 @@ void screen_init(void) {
 
     cairo_set_operator(cr, CAIRO_OPERATOR_CLEAR);
     cairo_paint(cr);
-    cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
+    cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
 
     cairo_font_options_t *font_options = cairo_font_options_create();
     cairo_font_options_set_antialias(font_options, CAIRO_ANTIALIAS_GRAY);
@@ -257,7 +258,7 @@ void screen_update(void) {
     return;
 send_buffer:
     cairo_surface_flush(surface);
-    ssd1322_update((uint8_t *) cairo_image_surface_get_data(surface), 8192);
+    ssd1322_update(surface, surface_may_have_color);
     clock_gettime(CLOCK_MONOTONIC_RAW, &last_update);
 }
 
@@ -362,7 +363,7 @@ void screen_level(int z) {
         z=0;
     else if(z>15)
         z=15;
-    cairo_set_source_rgba(cr, 0.0, 0.0, 0.0, c[z]);
+    cairo_set_source_rgb(cr, c[z], c[z], c[z]);
 }
 
 void screen_line_width(double w) {
@@ -461,7 +462,8 @@ void screen_clear(void) {
     CHECK_CR
     cairo_set_operator(cr, CAIRO_OPERATOR_CLEAR);
     cairo_paint(cr);
-    cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
+    cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
+    surface_may_have_color = 0;
 }
 
 double *screen_text_extents(const char *s) {
@@ -480,95 +482,26 @@ extern void screen_export_png(const char *s) {
 
 void screen_display_png(const char *filename, double x, double y) {
     int img_w, img_h;
-    cairo_format_t img_f;
     cairo_status_t status;
-    uint8_t * gray_u8;
 
     image = cairo_image_surface_create_from_png(filename);
     status = cairo_surface_status(image);
 
     if ( status ) {
         fprintf(stderr, "display_png: %s\n", cairo_status_to_string(status));
-        goto destroy_image;
     }
+
+    surface_may_have_color = 1;
 
     img_w = cairo_image_surface_get_width(image);
     img_h = cairo_image_surface_get_height(image);
-    img_f = cairo_image_surface_get_format(image);
 
-    cairo_surface_flush(image);
-
-    if( img_f != CAIRO_FORMAT_A8 ){
-        gray_u8 = malloc(img_w * img_h);
-        if( gray_u8 == NULL ){
-            fprintf(stderr, "display_png: malloc failed for transfer buffer\n");
-            goto destroy_image;
-        }
-    }
-
-    // For the cairo formats that don't store RGB in 8-bit values, scale these
-    // constants by the difference in resolution (bit-depth).
-    if( img_f == CAIRO_FORMAT_ARGB32 || img_f == CAIRO_FORMAT_RGB24 ){
-        uint32_t *data = (uint32_t *) cairo_image_surface_get_data(image);
-        for(int i = 0; i < (img_w * img_h); i++){
-            uint32_t r = (data[i] & 0xFF0000) >> 16;
-            uint32_t g = (data[i] & 0x00FF00) >>  8;
-            uint32_t b = (data[i] & 0x0000FF) >>  0;
-            uint32_t a = (r + g + b) / 3;
-            gray_u8[i] = (uint8_t) a;
-        }
-    }
-    else if( img_f == CAIRO_FORMAT_RGB16_565 ){
-        uint16_t *data = (uint16_t *) cairo_image_surface_get_data(image);
-        for(int i = 0; i < (img_w * img_h); i++){
-            uint32_t r = (data[i] & 0b1111100000000000) >> 11;
-            uint32_t g = (data[i] & 0b0000011111100000) >>  5;
-            uint32_t b = (data[i] & 0b0000000000011111) >>  0;
-            uint32_t a = ((r * 8) + (g * 4) + (b * 8)) / 3;
-            gray_u8[i] = (uint8_t) a;
-        }
-    }
-    else if( img_f == CAIRO_FORMAT_RGB30 ){
-        uint32_t *data = (uint32_t *) cairo_image_surface_get_data(image);
-        for(int i = 0; i < (img_w * img_h); i++){
-            uint32_t r = (data[i] & 0x3FF00000) >> 20;
-            uint32_t g = (data[i] & 0x000FFC00) >> 10;
-            uint32_t b = (data[i] & 0x000003FF) >>  0;
-            uint32_t a = ((r * 0.25) + (g * 0.25) + (b * 0.25)) / 3;
-            gray_u8[i] = (uint8_t) a;
-        }
-    }
-    else if( img_f == CAIRO_FORMAT_A8 ){
-        gray_u8 = (uint8_t *) cairo_image_surface_get_data(image);
-    }
-    else{
-        fprintf(
-            stderr,
-            "display_png: unsupported format=%d for %s, please open an issue"
-            "on github at https://github.com/monome/norns/issues wih the PNG\n",
-            img_f,
-            filename
-        );
-    }
-
-    uint8_t * dst_data = (uint8_t *) cairo_image_surface_get_data(surface);
-    for(int j = 0; j < img_h; j++){
-        for(int i = 0; i < img_w; i++){
-            int dst_pix = ((j + y) * 128) + (i + x);
-            if( dst_pix < 8192 ){
-                dst_data[dst_pix] = gray_u8[(j * img_w) + i];
-            }
-        }
-    }
-
-    cairo_surface_mark_dirty_rectangle(surface, x, y, img_w, img_h);
-
-    if( img_f != CAIRO_FORMAT_A8 ){
-        free(gray_u8);
-    }
-
-destroy_image:
+    cairo_save(cr);
+    cairo_set_source_surface(cr, image, x, y);
+    cairo_rectangle(cr, x, y, img_w, img_h);
+    cairo_fill(cr);
     cairo_surface_destroy(image);
+    cairo_restore(cr);
 }
 
 char *screen_peek(int x, int y, int *w, int *h) {
@@ -633,7 +566,7 @@ void screen_set_operator(int i) {
 screen_surface_t *screen_surface_new(double width, double height) {
     int w = (int)floor(width);
     int h = (int)floor(height);
-    cairo_format_t format = CAIRO_FORMAT_A8;
+    cairo_format_t format = CAIRO_FORMAT_ARGB32;
     cairo_surface_t *image = cairo_image_surface_create(format, w, h);
     cairo_status_t status = cairo_surface_status(image);
     if (status == CAIRO_STATUS_SUCCESS) {

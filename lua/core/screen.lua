@@ -394,7 +394,7 @@ Screen.restore = function() _norns.screen_restore() end
 Screen.BLEND_MODES = {
   ['NONE'] = 0,
   ['DEFAULT'] = 0,
-  ['SOURCE'] = 0,
+  ['OVER'] = 0,
   ['XOR'] = 1,
   ['ADD'] = 2,
   ['MULTIPLY'] = 3,
@@ -409,7 +409,7 @@ Screen.BLEND_MODES = {
   ['DIFFERENCE'] = 12,
   ['EXCLUSION'] = 13,
   ['CLEAR'] = 14,
-  ['OVER'] = 15,
+  ['SOURCE'] = 15,
   ['IN'] = 16,
   ['OUT'] = 17,
   ['ATOP'] = 18,
@@ -432,7 +432,7 @@ Screen.BLEND_MODES = {
 --
 -- there are other operators available, see the above link or use tab.print(screen.BLEND_MODES) in the REPL for the full list.
 --
--- 0 Source (default)
+-- 0 Over (default)
 --
 -- 1 XOR: clears any overlapping pixels.
 --
@@ -461,7 +461,7 @@ Screen.BLEND_MODES = {
 -- 13 Exclusion: similar to Difference, but has lower contrast.
 -- @usage -- number vs. string input
 -- screen.blend_mode(0)
--- screen.blend_mode('source')
+-- screen.blend_mode('over')
 -- @usage -- case-insensitivity
 -- screen.blend_mode('hard_light')
 -- screen.blend_mode('hArD_lIgHt')
