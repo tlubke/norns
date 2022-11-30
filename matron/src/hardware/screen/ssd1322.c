@@ -111,8 +111,6 @@ void ssd1322_init() {
         return;
     }
 
-
-
     gpio_0 = gpiod_chip_open_by_name(SSD1322_DC_AND_RESET_GPIO_CHIP);
     gpio_dc = gpiod_chip_get_line(gpio_0, SSD1322_DC_GPIO_LINE);
     gpio_reset = gpiod_chip_get_line(gpio_0, SSD1322_RESET_GPIO_LINE);
@@ -163,6 +161,8 @@ void ssd1322_deinit(){
         gpiod_line_release(gpio_dc);
         gpiod_chip_close(gpio_0);
         close(spidev_fd);
+
+        free(spidev_buffer);
     }
 }
 
