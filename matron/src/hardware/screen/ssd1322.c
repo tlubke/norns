@@ -215,7 +215,7 @@ void ssd1322_update(cairo_surface_t * surface, int surface_may_have_color){
         // If the surface has only been drawn to, we can guarantee that RGB are
         // all equal values representing a grayscale value. So, we can take any
         // of those channels arbitrarily.
-        for( uint32_t i = 0; i < buf_len; i += 16 ){
+        for( uint32_t i = 0; i < tx_len; i += 16 ){
             const uint8x16x4_t RGB = vld4q_u8((uint8_t *) (data + i));
             vst1q_u8(spidev_buffer + i, RGB.val[0]);
         }

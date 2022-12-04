@@ -87,9 +87,6 @@ static FT_Face face[NUM_FONTS];
 static double text_xy[2];
 
 void screen_init(void) {
-    ssd1322_init();
-    ssd1322_set_refresh_rate(120);
-
     surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 128, 64);
     cr = cr_primary = cairo_create(surface);
 
@@ -213,6 +210,17 @@ void screen_init(void) {
     cairo_set_font_size(cr, 8.0);
 
     fprintf(stderr, "font setup OK.\n");
+#ifdef NORNS_DESKTOP
+    matron_io_t *io;
+    TAILQ_FOREACH(io, &io_queue, entries) {
+        if (io->ops->type != IO_SCREEN) continue;
+        matron_fb_t *fb = (matron_fb_t *)io;
+        screen_ops_t *fb_ops = (screen_ops_t *)io->ops;
+        fb_ops->bind(fb, surface);
+    }
+#else
+    ssd1322_init();
+#endif
 }
 
 void screen_deinit(void) {
@@ -225,6 +233,18 @@ void screen_deinit(void) {
 
 void screen_update(void) {
     CHECK_CR
+
+#ifdef NORNS_DESKTOP
+    matron_io_t *io;
+    TAILQ_FOREACH(io, &io_queue, entries) {
+        if (io->ops->type != IO_SCREEN) continue;
+        matron_fb_t *fb = (matron_fb_t *)io;
+        screen_ops_t *fb_ops = (screen_ops_t *)io->ops;
+        fb_ops->paint(fb);
+    }
+    return;
+#endif
+
     static uint8_t overrun = 0b00000001; // Window starts at the smallest size.
     static struct timespec last_update = {};
     static struct timespec this_update = {};
