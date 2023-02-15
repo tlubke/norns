@@ -256,10 +256,10 @@ void screen_update(void) {
     long this_ms = (this_update.tv_sec * 1e3) + (this_update.tv_nsec/1e6);
     long last_ms = (last_update.tv_sec * 1e3) + (last_update.tv_nsec/1e6);
 
-    // Allow an exponentially resizing window for extra "overrun" frames.
+    // Allow a linearly resizing window for extra "overrun" frames.
     // In cases where the update comes within the fps limit, or outside the
     // window, grow the window. Otherwise, when outside the fps limit but
-    // inside the window, the window shrinks by a factor of two, restricted
+    // inside the window, the window shrinks by a frame length, restricted
     // to the duration of the fps limit itself. Implementation uses a single
     // byte and bit-shifting to make this "cheap". The size of the type could
     // be increased to allow for larger bursts of screen updates.
@@ -267,7 +267,7 @@ void screen_update(void) {
         overrun = (overrun & 0b10000000) | (overrun << 1);
         goto send_buffer;
     }
-    else if ( this_ms >= (last_ms + (limit_ms / (overrun + 1))) ){
+    else if ( this_ms >= (last_ms + (limit_ms * log2(overrun)))){
         overrun = (overrun & 0b00000001) | (overrun >> 1);
         goto send_buffer;
     }
