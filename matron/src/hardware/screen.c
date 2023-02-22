@@ -87,6 +87,7 @@ static FT_Face face[NUM_FONTS];
 static double text_xy[2];
 
 static pthread_t delay_frame_pthread_t;
+static bool delay_frame_running = false;
 static void* delay_frame_run(void * p){
     (void)p;
 
@@ -95,17 +96,24 @@ static void* delay_frame_run(void * p){
             .tv_nsec = (1/60) * 1e9,
     };
 
+    delay_frame_running = true;
+
     clock_nanosleep(CLOCK_MONOTONIC, 0,&ts, NULL);
 
     screen_update();
 
+    delay_frame_running = false;
+
     return NULL;
 }
 static void delay_frame(){
-    pthread_attr_t attr;
-    pthread_attr_init(&attr);
-    pthread_create(&delay_frame_pthread_t, &attr, &delay_frame_run, NULL);
-    pthread_attr_destroy(&attr);
+    if( !delay_frame_running ){
+        pthread_attr_t attr;
+        pthread_attr_init(&attr);
+        pthread_attr_setscope(&attr, PTHREAD_SCOPE_PROCESS);
+        pthread_create(&delay_frame_pthread_t, &attr, &delay_frame_run, NULL);
+        pthread_attr_destroy(&attr);
+    }
 }
 
 void screen_init(void) {
