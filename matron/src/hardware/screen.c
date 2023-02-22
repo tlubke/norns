@@ -86,6 +86,28 @@ static FT_Error status;
 static FT_Face face[NUM_FONTS];
 static double text_xy[2];
 
+static pthread_t delay_frame_pthread_t;
+static void* delay_frame_run(void * p){
+    (void)p;
+
+    static const struct timespec ts = {
+            .tv_sec = 0,
+            .tv_nsec = (1/60) * 1e9,
+    };
+
+    clock_nanosleep(CLOCK_MONOTONIC, 0,&ts, NULL);
+
+    screen_update();
+
+    return NULL;
+}
+static void delay_frame(){
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_create(&delay_frame_pthread_t, &attr, &delay_frame_run, NULL);
+    pthread_attr_destroy(&attr);
+}
+
 void screen_init(void) {
     surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 128, 64);
     cr = cr_primary = cairo_create(surface);
@@ -273,6 +295,7 @@ void screen_update(void) {
     }
     else{
         overrun = (overrun & 0b10000000) | (overrun << 1);
+        delay_frame();
     }
 
     return;
