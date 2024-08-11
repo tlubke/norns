@@ -52,6 +52,10 @@ void screen_results_free() {
             case SCREEN_RESULTS_PEEK:
                 free(results_data->peek.buf);
                 break;
+            case SCREEN_RESULTS_CONTEXT_NEW:
+                break;
+            case SCREEN_RESULTS_CONTEXT_GET_CURRENT:
+                break;
         }
         free(results_data);
         results_data = NULL;
