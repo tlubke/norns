@@ -39,7 +39,17 @@
 
 void print_version(void);
 
+static int exit_code = 0;
+
+extern void __real_exit(int);
+void __wrap_exit(int code){
+    exit_code = code;
+    __real_exit(code);
+}
+
 void cleanup(void) {
+    fprintf(stderr, "matron shutdown starting with exit_code=%d\n", exit_code);
+
     dev_monitor_deinit();
     osc_deinit();
     o_deinit();
@@ -74,7 +84,7 @@ int main(int argc, char **argv) {
     battery_init();
     stat_init();
     osc_init();
-    jack_client_init();
+    const int jack_client_init_error = jack_client_init();
     ssd1322_init();
     clock_init();
     clock_internal_init();
@@ -111,6 +121,25 @@ int main(int argc, char **argv) {
     input_init();
 
     i2c_init();
+
+    if (jack_client_init_error) {
+        screen_clear();
+        screen_level(15);
+        screen_move(0, 60);
+        screen_text("audio system fail");
+        screen_move(64, 32);
+        screen_text_center("press key to shutdown");
+        screen_update();
+
+        event_loop_arm_exit(EVENT_KEY);
+
+        while( !is_event_loop_exiting() ){
+            event_handle_pending();
+            // FIXME: Thread yield here?
+        }
+
+        exit(0);
+    }
 
     fprintf(stderr, "running startup...\n");
     // i/o subsystems are ready; run user startup routine

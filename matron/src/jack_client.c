@@ -3,8 +3,6 @@
 
 #include <jack/jack.h>
 
-#include "screen.h"
-
 static jack_client_t *jack_client;
 double jack_sample_rate;
 
@@ -33,17 +31,23 @@ int jack_client_init() {
   jack_sample_rate = (float)jack_get_sample_rate(jack_client);
   return 0;
 fail:
-  screen_clear();
-  screen_level(15);
-  screen_move(0, 60);
-  screen_text("jack fail.");
-  screen_update();
   return 1;
 }
 
-void jack_client_deinit() { jack_client_close(jack_client); }
+void jack_client_deinit() { 
+  if (jack_client) {
+    jack_client_close(jack_client);
+  }
+}
 
-float jack_client_get_cpu_load() { return jack_cpu_load(jack_client); }
+float jack_client_get_cpu_load() {
+  if (jack_client) {
+    return jack_cpu_load(jack_client);
+  }
+  else {
+    return 0.0;
+  }
+}
 
 uint32_t jack_client_get_xrun_count() {
   uint32_t count = atomic_exchange(&xrun_count, 0);
@@ -51,5 +55,10 @@ uint32_t jack_client_get_xrun_count() {
 }
 
 double jack_client_get_current_time() {
+  if (jack_client) {
   return (double)jack_frame_time(jack_client) / jack_sample_rate;
+}
+  else{
+    return -1.0;
+  }
 }

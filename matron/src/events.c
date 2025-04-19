@@ -37,6 +37,8 @@ struct ev_q {
 
 struct ev_q evq;
 bool quit;
+bool exiting;
+event_t exit_on_type = EVENT_FIRST_EVENT;
 
 //----------------------------
 //--- static function declarations
@@ -180,10 +182,23 @@ void event_loop(void) {
     }
 }
 
+void event_loop_arm_exit(event_t evcode){
+    exit_on_type = evcode;
+}
+
+bool is_event_loop_exiting(void){
+    return exiting;
+}
+
 //------------------------------
 //-- static function definitions
 
 static void handle_event(union event_data *ev) {
+    if (exit_on_type != EVENT_FIRST_EVENT) {
+        exiting = ev->type == exit_on_type;
+        goto end;
+    }
+
     switch (ev->type) {
     case EVENT_EXEC_CODE_LINE:
         w_handle_exec_code_line(ev->exec_code_line.line);
@@ -308,6 +323,7 @@ static void handle_event(union event_data *ev) {
         break;
     } /* switch */
 
+end:
     event_data_free(ev);
 }
 
