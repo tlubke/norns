@@ -13,6 +13,8 @@ extern void screen_font_face(int i);
 extern void screen_font_size(double z);
 extern void screen_aa(int s);
 extern void screen_gamma(double g);
+extern void screen_set_phase_length(int l);
+extern void screen_set_second_precharge_period(int p);
 extern void screen_brightness(int v);
 extern void screen_contrast(int c);
 extern void screen_invert(int i);

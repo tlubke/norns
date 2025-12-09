@@ -102,6 +102,8 @@ static int _screen_font_face(lua_State *l);
 static int _screen_font_size(lua_State *l);
 static int _screen_aa(lua_State *l);
 static int _screen_gamma(lua_State *l);
+static int _screen_set_phase_length(lua_State *l);
+static int _screen_set_second_precharge_period(lua_State *l);
 static int _screen_brightness(lua_State *l);
 static int _screen_contrast(lua_State *l);
 static int _screen_invert(lua_State *l);
@@ -488,6 +490,8 @@ void w_init(void) {
     lua_register_norns("screen_font_size", &_screen_font_size);
     lua_register_norns("screen_aa", &_screen_aa);
     lua_register_norns("screen_gamma", &_screen_gamma);
+    lua_register_norns("screen_set_phase_length", &_screen_set_phase_length);
+    lua_register_norns("screen_set_second_precharge_period", &_screen_set_second_precharge_period);
     lua_register_norns("screen_brightness", &_screen_brightness);
     lua_register_norns("screen_contrast", &_screen_contrast);
     lua_register_norns("screen_invert", &_screen_invert);
@@ -747,6 +751,32 @@ int _screen_gamma(lua_State *l) {
     lua_check_num_args(1);
     double g = luaL_checknumber(l, 1);
     screen_event_gamma(g);
+    lua_settop(l, 0);
+    return 0;
+}
+
+/***
+ * screen: set phase length (for SSD1322)
+ * @function s_set_phase_length
+ * @tparam int length in microseconds
+ */
+int _screen_set_phase_length(lua_State *l) {
+    lua_check_num_args(1);
+    int len = (int)luaL_checkinteger(l, 1);
+    screen_set_phase_length(len);
+    lua_settop(l, 0);
+    return 0;
+}
+
+/***
+ * screen: set second pre-charge period (for SSD1322)
+ * @function s_set_second_precharge_period
+ * @tparam int period
+ */
+int _screen_set_second_precharge_period(lua_State *l) {
+    lua_check_num_args(1);
+    int period = (int)luaL_checkinteger(l, 1);
+    screen_set_second_precharge_period(period);
     lua_settop(l, 0);
     return 0;
 }

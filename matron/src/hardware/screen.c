@@ -369,6 +369,24 @@ void screen_gamma(double g) {
     ssd1322_set_gamma(g);
 }
 
+void screen_set_phase_length(int phase_length){
+    uint8_t v = 0xFF;
+    if (0 <= phase_length && phase_length < 0xFF) {
+        v = phase_length;
+    }
+
+    ssd1322_set_phase_length(v);
+}
+
+void screen_set_second_precharge_period(int period){
+    uint8_t v = 0xFF;
+    if (0 <= period && period < 0xFF) {
+        v = period;
+    }
+
+    ssd1322_set_second_precharge_period(v);
+}
+
 void screen_invert(int inverted) {
     ssd1322_set_display_mode((inverted != 0) ? SSD1322_DISPLAY_MODE_INVERT : SSD1322_DISPLAY_MODE_NORMAL);
 }

@@ -172,7 +172,7 @@ void ssd1322_init() {
     write_command_with_data(SSD1322_SET_DISPLAY_OFFSET, 0x00);
     write_command_with_data(SSD1322_SET_DISPLAY_START_LINE, 0x00);
     write_command_with_data(SSD1322_SET_VDD_REGULATOR, 0x01);
-    write_command_with_data(SSD1322_SET_DISPLAY_ENHANCEMENT_A, 0xA0, 0xFD);
+    write_command_with_data(SSD1322_SET_DISPLAY_ENHANCEMENT_A, 0xA0, 0xFD); // 'Enable external VSL' + 'Enhance low GS display quality'
     write_command_with_data(SSD1322_SET_CONTRAST_CURRENT, 0x7F);
     write_command_with_data(SSD1322_MASTER_CURRENT_CONTROL, 0x0F);
     write_command_with_data(SSD1322_SET_PHASE_LENGTH, NORNS_PHASE_LENGTH);
@@ -415,6 +415,14 @@ void ssd1322_set_refresh_rate(uint8_t hz) {
     uint8_t freq = past_solutions[hz];
 
     write_command_with_data(SSD1322_SET_OSCILLATOR_FREQUENCY, freq);
+}
+
+void ssd1322_set_phase_length(uint8_t phase_length){
+    write_command_with_data(SSD1322_SET_PHASE_LENGTH, phase_length);
+}
+
+void ssd1322_set_second_precharge_period(uint8_t period){
+    write_command_with_data(SSD1322_SET_SECOND_PRECHARGE_PERIOD, period);
 }
 
 uint8_t *ssd1322_resize_buffer(size_t size) {

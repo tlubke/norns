@@ -91,4 +91,6 @@ void ssd1322_set_contrast(uint8_t c);
 void ssd1322_set_display_mode(ssd1322_display_mode_t);
 void ssd1322_set_gamma(double g);
 void ssd1322_set_refresh_rate(uint8_t hz);
+void ssd1322_set_phase_length(uint8_t phase_length);
+void ssd1322_set_second_precharge_period(uint8_t period);
 uint8_t *ssd1322_resize_buffer(size_t);
